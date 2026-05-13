@@ -1,0 +1,25 @@
+2026-05-12T00:43:42.635330Z  INFO core_backend: core-backend starting version="0.1.0" log_dir=logs
+2026-05-12T00:43:44.722245Z  WARN sqlx::pool::acquire: acquired connection, but time to acquire exceeded slow threshold aquired_after_secs=2.0852574 slow_acquire_threshold_secs=2.0
+2026-05-12T00:43:44.722331Z  INFO core_backend: database pool ready
+2026-05-12T00:57:15.016998Z  INFO core_backend: core-backend starting version="0.1.0" log_dir=logs
+2026-05-12T00:57:17.093692Z  WARN sqlx::pool::acquire: acquired connection, but time to acquire exceeded slow threshold aquired_after_secs=2.0755718 slow_acquire_threshold_secs=2.0
+2026-05-12T00:57:17.093780Z  INFO core_backend: database pool ready
+2026-05-12T00:57:17.111372Z  INFO core_backend: HTTP server ready addr="0.0.0.0:2009"
+2026-05-12T00:57:17.111410Z  INFO core_backend: Swagger UI available url="http://localhost:2009/swagger-ui/"
+2026-05-12T01:00:12.543867Z  INFO core_backend::api::handlers::auth::identity: POST /auth/login ← 200 email=string@string.com
+2026-05-12T06:22:14.384811Z  INFO core_backend: core-backend starting version="0.1.0" log_dir=logs
+2026-05-12T21:36:53.640092Z  INFO core_backend: core-backend starting version="0.1.0" log_dir=logs
+2026-05-12T21:36:55.733609Z  WARN sqlx::pool::acquire: acquired connection, but time to acquire exceeded slow threshold aquired_after_secs=2.0918441 slow_acquire_threshold_secs=2.0
+2026-05-12T21:36:55.733681Z  INFO core_backend: database pool ready
+2026-05-12T21:36:55.750467Z  INFO core_backend: HTTP server ready addr="0.0.0.0:2009"
+2026-05-12T21:36:55.750507Z  INFO core_backend: Swagger UI available url="http://localhost:2009/swagger-ui/"
+2026-05-12T22:52:35.003779Z  INFO core_backend: core-backend starting version="0.1.0" log_dir=logs
+2026-05-12T22:52:37.097886Z  WARN sqlx::pool::acquire: acquired connection, but time to acquire exceeded slow threshold aquired_after_secs=2.0921138 slow_acquire_threshold_secs=2.0
+2026-05-12T22:52:37.097962Z  INFO core_backend: database pool ready
+2026-05-12T22:52:37.115691Z  INFO core_backend: HTTP server ready addr="0.0.0.0:2009"
+2026-05-12T22:52:37.115729Z  INFO core_backend: Swagger UI available url="http://localhost:2009/swagger-ui/"
+2026-05-12T22:53:19.831222Z  INFO core_backend::api::handlers::auth::identity: POST /auth/login ← 200 email=string@string.com
+2026-05-12T22:53:59.127538Z  INFO core_backend::api::handlers::auth::identity: POST /auth/register ← 200 email=f1@f1.com
+2026-05-12T22:54:22.715303Z  INFO core_backend::api::handlers::auth::identity: POST /auth/login ← 200 email=f1@f1.com
+2026-05-12T22:54:59.547225Z  INFO core_backend::api::handlers::auth::identity: POST /auth/login ← 200 email=string@string.com
+2026-05-12T22:57:33.543388Z  INFO core_backend::api::handlers::auth::identity: POST /auth/login ← 200 email=f1@f1.com

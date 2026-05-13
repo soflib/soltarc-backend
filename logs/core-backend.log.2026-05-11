@@ -1,0 +1,10 @@
+2026-05-11T14:42:39.314650Z  INFO core_backend: core-backend starting version="0.1.0" log_dir=logs
+2026-05-11T14:42:41.394480Z  WARN sqlx::pool::acquire: acquired connection, but time to acquire exceeded slow threshold aquired_after_secs=2.0784687 slow_acquire_threshold_secs=2.0
+2026-05-11T14:42:41.394557Z  INFO core_backend: database pool ready
+2026-05-11T14:42:41.411838Z  INFO core_backend: HTTP server ready addr="0.0.0.0:2009"
+2026-05-11T14:42:41.411878Z  INFO core_backend: Swagger UI available url="http://localhost:2009/swagger-ui/"
+2026-05-11T14:50:39.944801Z  INFO core_backend::api::handlers::auth::identity: POST /auth/login ← 200 email=solbustani@gmail.com
+2026-05-11T15:09:45.931589Z  INFO core_backend::api::handlers::auth::identity: POST /auth/login ← 200 email=solbustani@gmail.com
+2026-05-11T15:11:06.424205Z  INFO core_backend::api::handlers::auth::identity: POST /auth/login ← 200 email=string@string.com
+2026-05-11T15:11:52.860108Z  INFO core_backend::api::handlers::auth::identity: POST /auth/login ← 200 email=solbustani@gmail.com
+2026-05-11T21:24:11.196924Z  INFO core_backend: core-backend starting version="0.1.0" log_dir=logs

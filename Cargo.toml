@@ -1,0 +1,52 @@
+[package]
+name = "core_backend"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.102"
+axum = { version = "0.8.8", features = ["multipart"] }
+calamine = "0.34.0"
+chrono = "0.4"
+http = "1.4.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+sha2 = "0.11.0"
+tempfile = "3.27.0"
+thiserror = "2.0.18"
+tokio = { version = "1.50.0", features = ["full"] }
+tower = "0.5.3"
+tower-http = { version = "0.6.8", features = ["cors", "trace"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
+tracing-appender   = "0.2"
+utoipa = { version = "5.4.0", features = ["axum_extras", "uuid", "chrono", "time"] }
+utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
+uuid = { version = "1.22.0", features = ["v4", "serde"] }
+zeroize = { version = "1.8.2", features = ["derive"] }
+sqlx = { version = "0.8", features = [
+    "runtime-tokio-native-tls",
+    "macros",
+    "postgres",
+    "uuid",
+    "chrono",
+    "rust_decimal",
+    "time"
+] }
+dotenvy = "0.15.7"
+rust_decimal = "1.41.0"
+time = { version = "0.3", features = ["formatting", "parsing", "macros", "serde"] }
+
+reqwest = { version = "0.13.3", features = ["json"] }
+
+rust_xlsxwriter = "0.94.1"
+printpdf = "0.9.1"
+rust-s3 = "0.37"
+
+prost = "0.14.3"
+tonic-prost = "0.14.5"
+tonic = { version = "0.14.5", features = ["tls-ring"] }
+
+
+[build-dependencies]
+tonic-prost-build = "0.14.5"

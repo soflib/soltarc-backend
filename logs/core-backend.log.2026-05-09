@@ -1,0 +1,12 @@
+2026-05-09T01:30:19.821123Z  INFO core_backend: core-backend starting version="0.1.0" log_dir=logs
+2026-05-09T01:30:21.907598Z  WARN sqlx::pool::acquire: acquired connection, but time to acquire exceeded slow threshold aquired_after_secs=2.0850541 slow_acquire_threshold_secs=2.0
+2026-05-09T01:30:21.907675Z  INFO core_backend: database pool ready
+2026-05-09T01:30:21.920924Z  INFO core_backend: HTTP server ready addr="0.0.0.0:2009"
+2026-05-09T01:30:21.920971Z  INFO core_backend: Swagger UI available url="http://localhost:2009/swagger-ui/"
+2026-05-09T01:37:03.867134Z  INFO core_backend::api::handlers::auth::identity: POST /auth/register ← 200 email=string
+2026-05-09T01:43:08.196023Z  INFO core_backend::api::handlers::auth::identity: POST /auth/register ← 200 email=string
+2026-05-09T01:44:30.447172Z  INFO core_backend::api::handlers::auth::identity: POST /auth/register ← 200 email=string1
+2026-05-09T01:49:15.002763Z  INFO core_backend::api::handlers::auth::identity: POST /auth/register ← 200 email=string1
+2026-05-09T02:03:49.731200Z  INFO core_backend::api::handlers::auth::identity: POST /auth/register ← 200 email=string
+2026-05-09T03:46:57.240065Z  INFO core_backend::api::handlers::auth::identity: POST /auth/register ← 200 email=string1
+2026-05-09T03:47:19.376744Z  INFO core_backend::api::handlers::auth::identity: POST /auth/login ← 200 email=string1
