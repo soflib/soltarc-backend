@@ -6,7 +6,8 @@
 //   crate::dal::ingresos::{alta, baja, cambios, consulta}
 
 use crate::dal::ingresos as dal;
-use crate::domain::models::ingresos::Ingresos;
+use crate::domain::models::ingresos::{Ingresos, IngresosFilter};
+use crate::domain::models::lookup::PageOf;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
 
@@ -24,4 +25,18 @@ pub async fn cambios(pool: &PgPool, ing: &Ingresos) -> ReturnCode {
 
 pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<Ingresos>, ReturnCode> {
     dal::consulta(pool, id).await
+}
+
+// ─────────────────────────────────────────────
+// LISTA — sin filtro de texto, opcionalmente por proyecto/cliente
+// ─────────────────────────────────────────────
+pub async fn lista(pool: &PgPool, proyecto: Option<i32>, cliente: Option<i32>) -> Result<Vec<Ingresos>, ReturnCode> {
+    dal::lista(pool, proyecto, cliente).await
+}
+
+// ─────────────────────────────────────────────
+// SEARCH — listado paginado con filtros + texto libre (ILIKE)
+// ─────────────────────────────────────────────
+pub async fn search(pool: &PgPool, filtros: &IngresosFilter) -> Result<PageOf<Ingresos>, ReturnCode> {
+    dal::search(pool, filtros).await
 }

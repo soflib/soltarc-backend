@@ -6,7 +6,7 @@
 // en los SPs _qry y _lstall. Son None en escrituras (alta/cambios).
 // Ver PATRON_NOMBRES.txt en la raíz del proyecto.
 
-use chrono::NaiveDateTime;
+use chrono::{NaiveDate, NaiveDateTime};
 use rust_decimal::Decimal;
 use uuid::Uuid;
 use utoipa::ToSchema;
@@ -31,4 +31,27 @@ pub struct Egresos {
     pub proveedor: i32,                      // FK → cpa_proveedores
     pub proveedor_nombre: Option<String>,    // resuelto por SP vía LEFT JOIN
     pub usuario: Uuid,
+}
+
+// ─────────────────────────────────────────────
+// Búsqueda paginada (sp_cpa_egresos_search)
+// Total_count = COUNT(*) OVER () repetido en cada fila.
+// ─────────────────────────────────────────────
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct EgresoConTotal {
+    #[sqlx(flatten)]
+    pub egreso:      Egresos,
+    pub total_count: i64,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct EgresosFilter {
+    pub proyecto:     Option<i32>,
+    pub proveedor:    Option<i32>,
+    pub centro_costo: Option<i32>,
+    pub fecha_ini:    Option<NaiveDate>,
+    pub fecha_fin:    Option<NaiveDate>,
+    pub q:            Option<String>,
+    pub offset:       i32,
+    pub limit:        i32,
 }

@@ -10,7 +10,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use chrono::NaiveDateTime;
+use chrono::{NaiveDate, NaiveDateTime};
 use rust_decimal::Decimal;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -18,9 +18,43 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 use tracing::{debug, error, info};
 
-use crate::domain::models::egresos::Egresos;
+use crate::domain::models::egresos::{Egresos, EgresosFilter};
+use crate::domain::models::lookup::LookupItem;
 use crate::infrastructure::db::app_state::AppState;
 use crate::services::finanzas::egresos as svc;
+
+#[derive(Debug, Deserialize)]
+pub struct EgresosSearchQuery {
+    pub proyecto:     Option<i32>,
+    pub proveedor:    Option<i32>,
+    pub centro_costo: Option<i32>,
+    /// YYYY-MM-DD
+    pub fecha_ini:    Option<String>,
+    /// YYYY-MM-DD
+    pub fecha_fin:    Option<String>,
+    pub q:            Option<String>,
+    pub page:         Option<i32>,
+    pub size:         Option<i32>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EgresosLookupQuery {
+    pub q:            Option<String>,
+    pub proyecto:     Option<i32>,
+    pub proveedor:    Option<i32>,
+    pub centro_costo: Option<i32>,
+    pub limit:        Option<i32>,
+}
+
+fn parse_date_opt(s: Option<&str>, field: &str) -> Result<Option<NaiveDate>, String> {
+    match s {
+        None => Ok(None),
+        Some(v) if v.is_empty() => Ok(None),
+        Some(v) => NaiveDate::parse_from_str(v, "%Y-%m-%d")
+            .map(Some)
+            .map_err(|e| format!("{} inválida: {e}", field)),
+    }
+}
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct EgresosInput {
@@ -315,6 +349,138 @@ pub async fn lista(
         }
         Err(rc) => {
             error!("GET /finanzas/egresos?proyecto={} ← 500 codigo={}", proyecto, rc.codigo);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "codigo": rc.codigo, "mensaje": rc.mensaje })))
+        }
+    }
+}
+
+// ── Búsqueda paginada con filtros + texto libre ───────────────────────────────
+//
+// GET /finanzas/egresos/search?proyecto=&proveedor=&centro_costo=&fecha_ini=&fecha_fin=&q=&page=1&size=25
+// Endpoint nuevo — el GET /finanzas/egresos existente queda intacto.
+
+#[utoipa::path(
+    get,
+    path = "/finanzas/egresos/search",
+    params(
+        ("proyecto"     = Option<i32>,    Query, description = "Filtra por proyecto"),
+        ("proveedor"    = Option<i32>,    Query, description = "Filtra por proveedor"),
+        ("centro_costo" = Option<i32>,    Query, description = "Filtra por centro de costo"),
+        ("fecha_ini"    = Option<String>, Query, description = "Desde (YYYY-MM-DD)"),
+        ("fecha_fin"    = Option<String>, Query, description = "Hasta (YYYY-MM-DD)"),
+        ("q"            = Option<String>, Query, description = "Texto libre (ILIKE referencia/comentario/proveedor/proyecto)"),
+        ("page"         = Option<i32>,    Query, description = "Página 1-based (default 1)"),
+        ("size"         = Option<i32>,    Query, description = "Tamaño de página (default 25, máx 200)"),
+    ),
+    responses(
+        (status = 200, description = "Listado paginado",         body = Value),
+        (status = 400, description = "Parámetro inválido",       body = Value),
+        (status = 500, description = "Error de base de datos",   body = Value),
+    ),
+    tag = "Finanzas"
+)]
+pub async fn search(
+    State(state): State<AppState>,
+    Query(q): Query<EgresosSearchQuery>,
+) -> (StatusCode, Json<Value>) {
+    let fecha_ini = match parse_date_opt(q.fecha_ini.as_deref(), "fecha_ini") {
+        Ok(v)    => v,
+        Err(msg) => return (StatusCode::BAD_REQUEST, Json(json!({ "codigo": -1, "mensaje": msg }))),
+    };
+    let fecha_fin = match parse_date_opt(q.fecha_fin.as_deref(), "fecha_fin") {
+        Ok(v)    => v,
+        Err(msg) => return (StatusCode::BAD_REQUEST, Json(json!({ "codigo": -1, "mensaje": msg }))),
+    };
+
+    let page = q.page.unwrap_or(1).max(1);
+    let size = q.size.unwrap_or(25).clamp(1, 200);
+    let offset = (page - 1) * size;
+
+    let filtros = EgresosFilter {
+        proyecto:     q.proyecto,
+        proveedor:    q.proveedor,
+        centro_costo: q.centro_costo,
+        fecha_ini,
+        fecha_fin,
+        q:            q.q,
+        offset,
+        limit:        size,
+    };
+    debug!("GET /finanzas/egresos/search page={} size={} filtros={:?}", page, size, filtros);
+
+    match svc::search(&state.postgres, &filtros).await {
+        Ok(page_res) => {
+            info!("GET /finanzas/egresos/search ← 200 {}/{} items", page_res.items.len(), page_res.total);
+            let items: Vec<Value> = page_res.items.iter().map(egreso_json).collect();
+            (StatusCode::OK, Json(json!({
+                "items": items,
+                "total": page_res.total,
+                "page":  page_res.page,
+                "size":  page_res.size,
+            })))
+        }
+        Err(rc) => {
+            error!("GET /finanzas/egresos/search ← 500 codigo={}", rc.codigo);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "codigo": rc.codigo, "mensaje": rc.mensaje })))
+        }
+    }
+}
+
+// ── Lookup (autocomplete) ─────────────────────────────────────────────────────
+//
+// GET /finanzas/egresos/lookup?q=foo&proyecto=&proveedor=&centro_costo=&limit=20
+// Etiqueta: "<fecha_aplica> · <proveedor_nombre> · <referencia> ($monto)"
+
+#[utoipa::path(
+    get,
+    path = "/finanzas/egresos/lookup",
+    params(
+        ("q"            = Option<String>, Query, description = "Texto libre (ILIKE)"),
+        ("proyecto"     = Option<i32>,    Query, description = "Restringe a un proyecto"),
+        ("proveedor"    = Option<i32>,    Query, description = "Restringe a un proveedor"),
+        ("centro_costo" = Option<i32>,    Query, description = "Restringe a un centro de costo"),
+        ("limit"        = Option<i32>,    Query, description = "Máximo (default 20, máx 100)"),
+    ),
+    responses(
+        (status = 200, description = "Lista [{id, etiqueta}]",   body = Value),
+        (status = 500, description = "Error de base de datos",   body = Value),
+    ),
+    tag = "Finanzas"
+)]
+pub async fn lookup(
+    State(state): State<AppState>,
+    Query(q): Query<EgresosLookupQuery>,
+) -> (StatusCode, Json<Value>) {
+    let limit = q.limit.unwrap_or(20).clamp(1, 100);
+    let filtros = EgresosFilter {
+        proyecto:     q.proyecto,
+        proveedor:    q.proveedor,
+        centro_costo: q.centro_costo,
+        fecha_ini:    None,
+        fecha_fin:    None,
+        q:            q.q,
+        offset:       0,
+        limit,
+    };
+    debug!("GET /finanzas/egresos/lookup filtros={:?}", filtros);
+
+    match svc::search(&state.postgres, &filtros).await {
+        Ok(page_res) => {
+            let items: Vec<LookupItem> = page_res.items.into_iter().map(|e| LookupItem {
+                id: e.id.unwrap_or(0),
+                etiqueta: format!(
+                    "{} · {} · {} (${})",
+                    e.fecha_aplica.format("%Y-%m-%d"),
+                    e.proveedor_nombre.as_deref().unwrap_or(""),
+                    e.referencia,
+                    e.monto,
+                ),
+            }).collect();
+            info!("GET /finanzas/egresos/lookup ← 200 {} items", items.len());
+            (StatusCode::OK, Json(json!(items)))
+        }
+        Err(rc) => {
+            error!("GET /finanzas/egresos/lookup ← 500 codigo={}", rc.codigo);
             (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "codigo": rc.codigo, "mensaje": rc.mensaje })))
         }
     }

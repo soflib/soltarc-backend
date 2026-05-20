@@ -71,6 +71,7 @@ use crate::api::handlers::sistema::seguridad as han_seguridad;
         crate::api::handlers::catalog_g::general_cat::obtiene_todo,
         crate::api::handlers::catalog_g::general_cat::obtiene_por_tipo,
         crate::api::handlers::catalog_g::general_cat::obtiene_tipos,
+        crate::api::handlers::catalog_g::general_cat::lookup,
         // Clients
         crate::api::handlers::catalog_g::clients::alta,
         crate::api::handlers::catalog_g::clients::baja,
@@ -79,12 +80,14 @@ use crate::api::handlers::sistema::seguridad as han_seguridad;
         crate::api::handlers::catalog_g::clients::nombre_cliente,
         crate::api::handlers::catalog_g::clients::obtiene_clientes,
         crate::api::handlers::catalog_g::clients::obtiene_tipos,
+        crate::api::handlers::catalog_g::clients::lookup,
         // Cost Centers
         crate::api::handlers::catalog_g::mtto_center_costs::alta,
         crate::api::handlers::catalog_g::mtto_center_costs::baja,
         crate::api::handlers::catalog_g::mtto_center_costs::cambios,
         crate::api::handlers::catalog_g::mtto_center_costs::consulta,
         crate::api::handlers::catalog_g::mtto_center_costs::obtiene_centros,
+        crate::api::handlers::catalog_g::mtto_center_costs::lookup,
         // Providers
         crate::api::handlers::catalog_g::providers::alta,
         crate::api::handlers::catalog_g::providers::baja,
@@ -93,6 +96,7 @@ use crate::api::handlers::sistema::seguridad as han_seguridad;
         crate::api::handlers::catalog_g::providers::carga_proveedores,
         crate::api::handlers::catalog_g::providers::obtiene_tipos,
         crate::api::handlers::catalog_g::providers::obtiene_giros,
+        crate::api::handlers::catalog_g::providers::lookup,
         // Quick Access
         crate::api::handlers::catalog_g::quick_access::lista_todos,
         crate::api::handlers::catalog_g::quick_access::cambios,
@@ -141,10 +145,14 @@ use crate::api::handlers::sistema::seguridad as han_seguridad;
         crate::api::handlers::finanzas::egresos::consulta,
         crate::api::handlers::finanzas::egresos::lista,
         crate::api::handlers::finanzas::egresos::total,
+        crate::api::handlers::finanzas::egresos::search,
+        crate::api::handlers::finanzas::egresos::lookup,
         crate::api::handlers::finanzas::ingresos::alta,
         crate::api::handlers::finanzas::ingresos::baja,
         crate::api::handlers::finanzas::ingresos::cambios,
         crate::api::handlers::finanzas::ingresos::consulta,
+        crate::api::handlers::finanzas::ingresos::lista,
+        crate::api::handlers::finanzas::ingresos::lookup,
         crate::api::handlers::finanzas::saldos_bancos::alta,
         crate::api::handlers::finanzas::saldos_bancos::baja,
         crate::api::handlers::finanzas::saldos_bancos::cambios,
@@ -163,6 +171,7 @@ use crate::api::handlers::sistema::seguridad as han_seguridad;
         crate::api::handlers::operaciones::proyectos::cliente_proy,
         crate::api::handlers::operaciones::proyectos::dir_proy,
         crate::api::handlers::operaciones::proyectos::total_ppto,
+        crate::api::handlers::operaciones::proyectos::lookup,
         // XRef
         crate::api::handlers::operaciones::xref::alta,
         crate::api::handlers::operaciones::xref::baja,
@@ -185,6 +194,8 @@ use crate::api::handlers::sistema::seguridad as han_seguridad;
         crate::api::handlers::operaciones::detalle_proyecto::part_no_destino,
         crate::api::handlers::operaciones::detalle_proyecto::carga_nivel,
         crate::api::handlers::operaciones::detalle_proyecto::copia_part_qry,
+        crate::api::handlers::operaciones::detalle_proyecto::arbol,
+        crate::api::handlers::operaciones::detalle_proyecto::buscar,
         // AI
         crate::api::handlers::ai::chat::chat,
         // Finanzas — Flujo de Caja y Reportes
@@ -229,6 +240,7 @@ use crate::api::handlers::sistema::seguridad as han_seguridad;
         crate::api::handlers::ppto::presupuesto::cambio,
         crate::api::handlers::ppto::presupuesto::consulta,
         crate::api::handlers::ppto::presupuesto::carga_pptos,
+        crate::api::handlers::ppto::presupuesto::lookup,
         // PPTO — Partidas PPTO
         crate::api::handlers::ppto::partidas_ppto::alta,
         crate::api::handlers::ppto::partidas_ppto::borra,
@@ -237,6 +249,8 @@ use crate::api::handlers::sistema::seguridad as han_seguridad;
         crate::api::handlers::ppto::partidas_ppto::actualiza_nodo,
         crate::api::handlers::ppto::partidas_ppto::nuevo_nodo,
         crate::api::handlers::ppto::partidas_ppto::carga_2_nivel,
+        crate::api::handlers::ppto::partidas_ppto::arbol,
+        crate::api::handlers::ppto::partidas_ppto::buscar,
         // PPTO — Presupuesto a Proyecto
         crate::api::handlers::ppto::ppto_a_proyecto::consulta_numero_partidas,
         crate::api::handlers::ppto::ppto_a_proyecto::carga_nodos,
@@ -415,14 +429,16 @@ pub fn build_router(postgres: PgPool, auth_grpc: AuthGrpcClient) -> Router {
     // CatCenCosto, CatProvee, CatTpoCost, Egresos, Ingresos, SaldosBanco,
     // Finanzas operations, ReportesFinan, FlujoCaja.
     let han_cost_centers = Router::new()
-        .route("/catalog/cost-centers",      post(mtto_center_costs::alta))
-        .route("/catalog/cost-centers",      get(mtto_center_costs::obtiene_centros))
-        .route("/catalog/cost-centers",      put(mtto_center_costs::cambios))
-        .route("/catalog/cost-centers/{id}", get(mtto_center_costs::consulta))
-        .route("/catalog/cost-centers/{id}", delete(mtto_center_costs::baja))
+        .route("/catalog/cost-centers/lookup", get(mtto_center_costs::lookup))
+        .route("/catalog/cost-centers",        post(mtto_center_costs::alta))
+        .route("/catalog/cost-centers",        get(mtto_center_costs::obtiene_centros))
+        .route("/catalog/cost-centers",        put(mtto_center_costs::cambios))
+        .route("/catalog/cost-centers/{id}",   get(mtto_center_costs::consulta))
+        .route("/catalog/cost-centers/{id}",   delete(mtto_center_costs::baja))
         .route_layer(middleware::from_fn(require_finanzas));
 
     let han_providers = Router::new()
+        .route("/catalog/providers/lookup", get(providers::lookup))
         .route("/catalog/providers/tipos",  get(providers::obtiene_tipos))
         .route("/catalog/providers/giros",  get(providers::obtiene_giros))
         .route("/catalog/providers",        post(providers::alta))
@@ -441,15 +457,19 @@ pub fn build_router(postgres: PgPool, auth_grpc: AuthGrpcClient) -> Router {
         .route_layer(middleware::from_fn(require_finanzas));
 
     let han_finanzas = Router::new()
-        // Egresos
+        // Egresos — rutas estáticas primero para que no choquen con /{id}
         .route("/finanzas/egresos/total",            get(han_egr::total))
+        .route("/finanzas/egresos/search",           get(han_egr::search))
+        .route("/finanzas/egresos/lookup",           get(han_egr::lookup))
         .route("/finanzas/egresos",                  post(han_egr::alta))
         .route("/finanzas/egresos",                  get(han_egr::lista))
         .route("/finanzas/egresos",                  put(han_egr::cambios))
         .route("/finanzas/egresos/{id}",             get(han_egr::consulta))
         .route("/finanzas/egresos/{id}",             delete(han_egr::baja))
-        // Ingresos
+        // Ingresos — rutas estáticas primero
+        .route("/finanzas/ingresos/lookup",          get(han_ing::lookup))
         .route("/finanzas/ingresos",                 post(han_ing::alta))
+        .route("/finanzas/ingresos",                 get(han_ing::lista))
         .route("/finanzas/ingresos",                 put(han_ing::cambios))
         .route("/finanzas/ingresos/{id}",            get(han_ing::consulta))
         .route("/finanzas/ingresos/{id}",            delete(han_ing::baja))
@@ -485,6 +505,7 @@ pub fn build_router(postgres: PgPool, auth_grpc: AuthGrpcClient) -> Router {
     // Proyectos, DetalleProyecto, XRef, PlanDeObra, PlanSemanal,
     // PPTOaProy, PPTOPart, Presupuesto.
     let han_cat_general = Router::new()
+        .route("/general/catalogs/lookup",      get(general_cat::lookup))
         .route("/general/catalog-types",        get(general_cat::obtiene_tipos))
         .route("/general/catalogs/tipo/{tipo}", get(general_cat::obtiene_por_tipo))
         .route("/general/catalogs",             post(general_cat::alta))
@@ -530,6 +551,7 @@ pub fn build_router(postgres: PgPool, auth_grpc: AuthGrpcClient) -> Router {
         .route_layer(middleware::from_fn(require_arquitecto));
 
     let han_proyectos = Router::new()
+        .route("/operaciones/proyectos/lookup",             get(han_proy::lookup))
         .route("/operaciones/grupos",                       get(han_proy::lista_grupos))
         .route("/operaciones/grupos/{id}/usuarios",         get(han_proy::usuarios_grupo))
         .route("/operaciones/proyectos",                    post(han_proy::alta))
@@ -544,6 +566,8 @@ pub fn build_router(postgres: PgPool, auth_grpc: AuthGrpcClient) -> Router {
         .route_layer(middleware::from_fn(require_arquitecto));
 
     let han_detalle_proyecto = Router::new()
+        .route("/operaciones/detalle-proyecto/arbol",       get(han_det_proy::arbol))
+        .route("/operaciones/detalle-proyecto/buscar",      get(han_det_proy::buscar))
         .route("/operaciones/detalle-proyecto/nodos-desc",  get(han_det_proy::nodos_desc))
         .route("/operaciones/detalle-proyecto/no-destino",  get(han_det_proy::part_no_destino))
         .route("/operaciones/detalle-proyecto/nivel2",      get(han_det_proy::carga_nivel))
@@ -591,6 +615,8 @@ pub fn build_router(postgres: PgPool, auth_grpc: AuthGrpcClient) -> Router {
         .route_layer(middleware::from_fn(require_arquitecto));
 
     let han_partidas_routes = Router::new()
+        .route("/ppto/partidas/arbol",      get(han_partidas::arbol))
+        .route("/ppto/partidas/buscar",     get(han_partidas::buscar))
         .route("/ppto/partidas/nuevo-nodo", get(han_partidas::nuevo_nodo))
         .route("/ppto/partidas/nivel2",     get(han_partidas::carga_2_nivel))
         .route("/ppto/partidas",            post(han_partidas::alta))
@@ -601,16 +627,18 @@ pub fn build_router(postgres: PgPool, auth_grpc: AuthGrpcClient) -> Router {
         .route_layer(middleware::from_fn(require_arquitecto));
 
     let han_presupuesto_routes = Router::new()
-        .route("/ppto/presupuestos",      post(han_presupuesto::alta))
-        .route("/ppto/presupuestos",      get(han_presupuesto::carga_pptos))
-        .route("/ppto/presupuestos",      put(han_presupuesto::cambio))
-        .route("/ppto/presupuestos/{id}", get(han_presupuesto::consulta))
-        .route("/ppto/presupuestos/{id}", delete(han_presupuesto::baja))
+        .route("/ppto/presupuestos/lookup", get(han_presupuesto::lookup))
+        .route("/ppto/presupuestos",        post(han_presupuesto::alta))
+        .route("/ppto/presupuestos",        get(han_presupuesto::carga_pptos))
+        .route("/ppto/presupuestos",        put(han_presupuesto::cambio))
+        .route("/ppto/presupuestos/{id}",   get(han_presupuesto::consulta))
+        .route("/ppto/presupuestos/{id}",   delete(han_presupuesto::baja))
         .route_layer(middleware::from_fn(require_arquitecto));
 
     // ── Admin | Arquitecto | Finanzas ──────────────────────────────────────────
     // CatCtes (Clients catalog), CatCtosEstim (Estimated Costs).
     let han_clients = Router::new()
+        .route("/catalog/clients/lookup",       get(clients::lookup))
         .route("/catalog/clients/tipos",        get(clients::obtiene_tipos))
         .route("/catalog/clients/{id}/nombre",  get(clients::nombre_cliente))
         .route("/catalog/clients",              post(clients::alta))

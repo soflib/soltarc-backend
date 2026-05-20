@@ -10,7 +10,8 @@
 //
 // Nota: @Usuario solo se envía en Alta (igual que en C#)
 
-use crate::domain::models::ingresos::Ingresos;
+use crate::domain::models::ingresos::{IngresoConTotal, Ingresos, IngresosFilter};
+use crate::domain::models::lookup::PageOf;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
 
@@ -104,5 +105,55 @@ pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<Ingresos>, Return
     match result {
         Ok(registro) => Ok(registro),
         Err(e)       => Err(ReturnCode { codigo: -45, afectado: 0, mensaje: e.to_string() }),
+    }
+}
+
+// ─────────────────────────────────────────────
+// LISTA — sp_cpa_ingresos_lstact
+// Filtros opcionales por proyecto y/o cliente (None = sin filtro).
+// ─────────────────────────────────────────────
+pub async fn lista(pool: &PgPool, proyecto: Option<i32>, cliente: Option<i32>) -> Result<Vec<Ingresos>, ReturnCode> {
+    let result = sqlx::query_as::<_, Ingresos>(
+        "SELECT * FROM arqeth.sp_cpa_ingresos_lstact($1, $2)"
+    )
+    .bind(proyecto)
+    .bind(cliente)
+    .fetch_all(pool)
+    .await;
+
+    match result {
+        Ok(lista) => Ok(lista),
+        Err(e)    => Err(ReturnCode { codigo: -55, afectado: 0, mensaje: e.to_string() }),
+    }
+}
+
+// ─────────────────────────────────────────────
+// SEARCH — sp_cpa_ingresos_search
+// Filtros + ILIKE en referencia/comentario/cliente/proyecto + paginación.
+// El SP devuelve total_count en cada fila para evitar un segundo viaje.
+// ─────────────────────────────────────────────
+pub async fn search(pool: &PgPool, f: &IngresosFilter) -> Result<PageOf<Ingresos>, ReturnCode> {
+    let rows = sqlx::query_as::<_, IngresoConTotal>(
+        "SELECT * FROM arqeth.sp_cpa_ingresos_search($1, $2, $3, $4, $5, $6, $7)"
+    )
+    .bind(f.proyecto)
+    .bind(f.cliente)
+    .bind(f.fecha_ini)
+    .bind(f.fecha_fin)
+    .bind(f.q.as_deref())
+    .bind(f.offset)
+    .bind(f.limit)
+    .fetch_all(pool)
+    .await;
+
+    match rows {
+        Ok(rows) => {
+            let total = rows.first().map(|r| r.total_count).unwrap_or(0);
+            let size  = if f.limit > 0 { f.limit } else { 25 };
+            let page  = if size > 0 { (f.offset / size) + 1 } else { 1 };
+            let items = rows.into_iter().map(|r| r.ingreso).collect();
+            Ok(PageOf { items, total, page, size })
+        }
+        Err(e) => Err(ReturnCode { codigo: -65, afectado: 0, mensaje: e.to_string() }),
     }
 }

@@ -12,6 +12,7 @@ pub mod flujo_caja;
 pub mod gn_grupos;
 pub mod gn_usuarios;
 pub mod ingresos;
+pub mod lookup;
 pub mod partidas_fec_dep;
 pub mod partidas_ppto;
 pub mod partidas_presupuesto;

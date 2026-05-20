@@ -12,6 +12,7 @@
 //   sp_cpa_catalogo_lst_tipos → lista tipos distintos
 
 use crate::domain::models::catalog_g::CatalogG;
+use crate::domain::models::lookup::LookupItem;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
 use tracing::{debug, error, info};
@@ -222,5 +223,25 @@ pub async fn obtiene_tipos(pool: &PgPool) -> Result<Vec<CatalogG>, ReturnCode> {
             error!("dal::catalog_g::obtiene_tipos ← DB error: {}", e);
             Err(ReturnCode { codigo: -55, afectado: 0, mensaje: e.to_string() })
         }
+    }
+}
+
+// ─────────────────────────────────────────────
+// LOOKUP — sp_cpa_catalogo_lookup
+// Autocomplete dentro de un tipo (5=bancos, 3=tipos persona moral, etc.).
+// ─────────────────────────────────────────────
+pub async fn lookup(pool: &PgPool, tipo: i16, q: &str, limit: i32) -> Result<Vec<LookupItem>, ReturnCode> {
+    let result = sqlx::query_as::<_, LookupItem>(
+        "SELECT id, etiqueta FROM arqeth.sp_cpa_catalogo_lookup($1, $2, $3)"
+    )
+    .bind(tipo)
+    .bind(q)
+    .bind(limit)
+    .fetch_all(pool)
+    .await;
+
+    match result {
+        Ok(lista) => Ok(lista),
+        Err(e)    => Err(ReturnCode { codigo: -65, afectado: 0, mensaje: e.to_string() }),
     }
 }

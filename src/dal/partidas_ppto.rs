@@ -15,7 +15,7 @@
 //       Se migra a Rust manteniendo la misma lógica sin SP adicional.
 //       Carga2Nivel() devuelve Vec<PartidasPpto> en lugar de llenar un ListBox.
 
-use crate::domain::models::partidas_ppto::PartidasPpto;
+use crate::domain::models::partidas_ppto::{PartidaBuscada, PartidasPpto};
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
 
@@ -195,5 +195,26 @@ pub async fn carga_2_nivel(pool: &PgPool, nodo: i32, ppto: i32) -> Result<Vec<Pa
         Ok(lista) if !lista.is_empty() => Ok(lista),
         Ok(_)  => Err(ReturnCode { codigo: -91, afectado: 0, mensaje: "No hay partidas del nivel".to_string() }),
         Err(e) => Err(ReturnCode { codigo: -96, afectado: 0, mensaje: e.to_string() }),
+    }
+}
+
+// ─────────────────────────────────────────────
+// BUSCAR — sp_cpa_partidasppto_buscar
+// Búsqueda por concepto dentro de un presupuesto. Cada fila incluye `ruta`
+// con los conceptos ancestros ("Preliminares > Excavación").
+// Para el árbol completo, sigue usándose `carga_partidas`.
+// ─────────────────────────────────────────────
+pub async fn buscar(pool: &PgPool, presupuesto: i32, texto: &str) -> Result<Vec<PartidaBuscada>, ReturnCode> {
+    let result = sqlx::query_as::<_, PartidaBuscada>(
+        "SELECT * FROM arqeth.sp_cpa_partidasppto_buscar($1, $2)"
+    )
+    .bind(presupuesto)
+    .bind(texto)
+    .fetch_all(pool)
+    .await;
+
+    match result {
+        Ok(lista) => Ok(lista),
+        Err(e)    => Err(ReturnCode { codigo: -125, afectado: 0, mensaje: e.to_string() }),
     }
 }

@@ -26,9 +26,20 @@ use serde_json::{json, Value};
 use utoipa::ToSchema;
 use tracing::{debug, error, info};
 
-use crate::domain::models::detalle_proyectos::DetalleProyectos;
+use crate::domain::models::detalle_proyectos::{DetalleProyectos, NodoArbol};
 use crate::infrastructure::db::app_state::AppState;
 use crate::services::operaciones::detalle_proyecto as svc;
+
+#[derive(Debug, Deserialize)]
+pub struct ArbolQuery {
+    pub proyecto: i32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BuscarQuery {
+    pub proyecto: i32,
+    pub q:        Option<String>,
+}
 
 // ─────────────────────────────────────────────
 // INPUT STRUCTS
@@ -705,6 +716,79 @@ pub async fn copia_part_qry(
         Err(ret) => {
             info!("GET /operaciones/detalle-proyecto/copia-qry ← 404");
             (StatusCode::NOT_FOUND, Json(json!({ "codigo": ret.codigo, "mensaje": ret.mensaje })))
+        }
+    }
+}
+
+// ── Árbol WBS del proyecto ────────────────────────────────────────────────────
+//
+// GET /operaciones/detalle-proyecto/arbol?proyecto=X
+// Devuelve id, nodo, descripción, nivel, importe, estado para que el frontend
+// reconstruya la jerarquía completa.
+
+#[utoipa::path(
+    get,
+    path = "/operaciones/detalle-proyecto/arbol",
+    params(("proyecto" = i32, Query, description = "Id del proyecto")),
+    responses(
+        (status = 200, description = "Árbol del WBS",            body = Value),
+        (status = 500, description = "Error de base de datos",   body = Value),
+    ),
+    tag = "DetalleProyecto"
+)]
+pub async fn arbol(
+    State(state): State<AppState>,
+    Query(q): Query<ArbolQuery>,
+) -> (StatusCode, Json<Value>) {
+    debug!(proyecto = q.proyecto, "GET /operaciones/detalle-proyecto/arbol");
+
+    match svc::arbol(&state.postgres, q.proyecto).await {
+        Ok(lista) => {
+            info!("GET /operaciones/detalle-proyecto/arbol?proyecto={} ← 200 {} nodos", q.proyecto, lista.len());
+            let payload: Vec<NodoArbol> = lista;
+            (StatusCode::OK, Json(json!({ "items": payload, "total": payload.len() })))
+        }
+        Err(rc) => {
+            error!("GET /operaciones/detalle-proyecto/arbol?proyecto={} ← 500 codigo={}", q.proyecto, rc.codigo);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "codigo": rc.codigo, "mensaje": rc.mensaje })))
+        }
+    }
+}
+
+// ── Búsqueda WBS por descripción ──────────────────────────────────────────────
+//
+// GET /operaciones/detalle-proyecto/buscar?proyecto=X&q=texto
+// Devuelve coincidencias con `ruta` ancestral.
+
+#[utoipa::path(
+    get,
+    path = "/operaciones/detalle-proyecto/buscar",
+    params(
+        ("proyecto" = i32,            Query, description = "Id del proyecto"),
+        ("q"        = Option<String>, Query, description = "Texto a buscar en la descripción (ILIKE)"),
+    ),
+    responses(
+        (status = 200, description = "Lista de coincidencias con ruta", body = Value),
+        (status = 500, description = "Error de base de datos",          body = Value),
+    ),
+    tag = "DetalleProyecto"
+)]
+pub async fn buscar(
+    State(state): State<AppState>,
+    Query(q): Query<BuscarQuery>,
+) -> (StatusCode, Json<Value>) {
+    let texto = q.q.unwrap_or_default();
+    debug!(proyecto = q.proyecto, q = %texto, "GET /operaciones/detalle-proyecto/buscar");
+
+    match svc::buscar(&state.postgres, q.proyecto, &texto).await {
+        Ok(lista) => {
+            info!("GET /operaciones/detalle-proyecto/buscar ← 200 {} items", lista.len());
+            let payload: Vec<NodoArbol> = lista;
+            (StatusCode::OK, Json(json!({ "items": payload, "total": payload.len() })))
+        }
+        Err(rc) => {
+            error!("GET /operaciones/detalle-proyecto/buscar ← 500 codigo={}", rc.codigo);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "codigo": rc.codigo, "mensaje": rc.mensaje })))
         }
     }
 }

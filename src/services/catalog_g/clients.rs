@@ -15,6 +15,7 @@
 use crate::dal::{catalog_g, clientes as dal_clientes};
 use crate::domain::models::catalog_g::CatalogG;
 use crate::domain::models::clients::Clientes;
+use crate::domain::models::lookup::LookupItem;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
 
@@ -61,4 +62,11 @@ pub async fn obtiene_clientes(pool: &PgPool, activos: bool) -> Result<Vec<Client
 // ─────────────────────────────────────────────
 pub async fn obtiene_tipos(pool: &PgPool) -> Result<Vec<CatalogG>, ReturnCode> {
     catalog_g::obtiene_por_tipo(pool, 3).await
+}
+
+// ─────────────────────────────────────────────
+// LOOKUP — autocomplete clientes activos
+// ─────────────────────────────────────────────
+pub async fn lookup(pool: &PgPool, q: &str, limit: i32) -> Result<Vec<LookupItem>, ReturnCode> {
+    dal_clientes::lookup(pool, q, limit).await
 }

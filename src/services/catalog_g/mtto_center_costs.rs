@@ -11,6 +11,7 @@
 
 use crate::dal::centros_costo;
 use crate::domain::models::centros_costo::CentrosCosto;
+use crate::domain::models::lookup::LookupItem;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
 
@@ -50,4 +51,11 @@ pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<CentrosCosto>, Re
 // ─────────────────────────────────────────────
 pub async fn obtiene_centros(pool: &PgPool, activos: bool) -> Result<Vec<CentrosCosto>, ReturnCode> {
     centros_costo::obtiene_todo(pool, activos).await
+}
+
+// ─────────────────────────────────────────────
+// LOOKUP — autocomplete centros de costo activos
+// ─────────────────────────────────────────────
+pub async fn lookup(pool: &PgPool, q: &str, limit: i32) -> Result<Vec<LookupItem>, ReturnCode> {
+    centros_costo::lookup(pool, q, limit).await
 }

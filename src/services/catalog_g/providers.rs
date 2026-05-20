@@ -15,6 +15,7 @@
 
 use crate::dal::{catalog_g, proveedores as dal_prov};
 use crate::domain::models::catalog_g::CatalogG;
+use crate::domain::models::lookup::LookupItem;
 use crate::domain::models::proveedores::Proveedores;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
@@ -70,4 +71,11 @@ pub async fn obtiene_tipos(pool: &PgPool) -> Result<Vec<CatalogG>, ReturnCode> {
 // ─────────────────────────────────────────────
 pub async fn obtiene_giros(pool: &PgPool) -> Result<Vec<CatalogG>, ReturnCode> {
     catalog_g::obtiene_por_tipo(pool, 4).await
+}
+
+// ─────────────────────────────────────────────
+// LOOKUP — autocomplete proveedores activos
+// ─────────────────────────────────────────────
+pub async fn lookup(pool: &PgPool, q: &str, limit: i32) -> Result<Vec<LookupItem>, ReturnCode> {
+    dal_prov::lookup(pool, q, limit).await
 }

@@ -1,10 +1,11 @@
 # ─── Build ───────────────────────────────────────────────────────────────────
-FROM rust:1.87-slim-bookworm AS builder
+FROM rust:1.95-slim-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     protobuf-compiler \
     pkg-config \
     libssl-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -15,6 +15,7 @@
 //   sp_cpa_ProyectoClienteNombre → reemplaza JOIN inline para nombre cliente
 //   sp_cpa_ProyectoDirImagenes   → reemplaza SELECT inline para directorio
 
+use crate::domain::models::lookup::LookupItem;
 use crate::domain::models::proyectos::Proyectos;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
@@ -224,5 +225,24 @@ pub async fn total_ppto(pool: &PgPool, proyecto: i32) -> Result<rust_decimal::De
         Ok(Some(total)) => Ok(total),
         Ok(None)        => Err(ReturnCode { codigo: -86, afectado: 0, mensaje: "Sin resultado".to_string() }),
         Err(e)          => Err(ReturnCode { codigo: -86, afectado: 0, mensaje: e.to_string() }),
+    }
+}
+
+// ─────────────────────────────────────────────
+// LOOKUP — sp_cpa_proyectos_lookup
+// Etiqueta: "<nombre del proyecto> — <cliente>"
+// ─────────────────────────────────────────────
+pub async fn lookup(pool: &PgPool, q: &str, limit: i32) -> Result<Vec<LookupItem>, ReturnCode> {
+    let result = sqlx::query_as::<_, LookupItem>(
+        "SELECT id, etiqueta FROM arqeth.sp_cpa_proyectos_lookup($1, $2)"
+    )
+    .bind(q)
+    .bind(limit)
+    .fetch_all(pool)
+    .await;
+
+    match result {
+        Ok(lista) => Ok(lista),
+        Err(e)    => Err(ReturnCode { codigo: -95, afectado: 0, mensaje: e.to_string() }),
     }
 }

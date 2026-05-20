@@ -9,6 +9,7 @@
 //   sp_cpa_ProveedoresQry    → consulta por id
 //   sp_cpa_ProveedoresLstAll → lista todos (activos o no)
 
+use crate::domain::models::lookup::LookupItem;
 use crate::domain::models::proveedores::Proveedores;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
@@ -121,5 +122,23 @@ pub async fn carga_proveedores(pool: &PgPool, activos: bool) -> Result<Vec<Prove
         Ok(lista) if !lista.is_empty() => Ok(lista),
         Ok(_)  => Err(ReturnCode { codigo: -10, afectado: 0, mensaje: "No hay proveedores".to_string() }),
         Err(e) => Err(ReturnCode { codigo: -55, afectado: 0, mensaje: e.to_string() }),
+    }
+}
+
+// ─────────────────────────────────────────────
+// LOOKUP — sp_cpa_proveedores_lookup
+// ─────────────────────────────────────────────
+pub async fn lookup(pool: &PgPool, q: &str, limit: i32) -> Result<Vec<LookupItem>, ReturnCode> {
+    let result = sqlx::query_as::<_, LookupItem>(
+        "SELECT id, etiqueta FROM arqeth.sp_cpa_proveedores_lookup($1, $2)"
+    )
+    .bind(q)
+    .bind(limit)
+    .fetch_all(pool)
+    .await;
+
+    match result {
+        Ok(lista) => Ok(lista),
+        Err(e)    => Err(ReturnCode { codigo: -65, afectado: 0, mensaje: e.to_string() }),
     }
 }

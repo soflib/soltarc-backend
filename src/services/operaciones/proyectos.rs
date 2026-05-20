@@ -14,6 +14,7 @@
 //   crate::dal::proyectos::total_ppto
 
 use crate::dal::proyectos as dal;
+use crate::domain::models::lookup::LookupItem;
 use crate::domain::models::proyectos::Proyectos;
 use crate::infrastructure::db::return_code::ReturnCode;
 use rust_decimal::Decimal;
@@ -67,4 +68,12 @@ pub async fn usuarios_grupo(
 ) -> Result<Vec<crate::domain::models::gn_usuarios::GnUsuarios>, ReturnCode> {
     let todos = crate::dal::gn_usuarios::obtiene_todo(pool).await?;
     Ok(todos.into_iter().filter(|u| u.grupo_negocio == grupo_id).collect())
+}
+
+// ─────────────────────────────────────────────
+// LOOKUP — autocomplete proyectos activos
+// Etiqueta del SP: "<nombre proyecto> — <cliente>"
+// ─────────────────────────────────────────────
+pub async fn lookup(pool: &PgPool, q: &str, limit: i32) -> Result<Vec<LookupItem>, ReturnCode> {
+    dal::lookup(pool, q, limit).await
 }

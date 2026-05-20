@@ -45,6 +45,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 use rust_decimal::Decimal;
+use serde::Serialize;
+use utoipa::ToSchema;
 
 // ─────────────────────────────────────────────
 // PartidasPpto
@@ -161,4 +163,22 @@ impl PartidasPpto {
     pub fn es_raiz(&self) -> bool {
         self.nivel == Some(1)
     }
+}
+
+// ─────────────────────────────────────────────
+// PartidaBuscada
+// Origen: sp_cpa_partidasppto_buscar(presupuesto, texto)
+// Resultado plano para mostrar en un listado de búsqueda — incluye `ruta`
+// con los conceptos ancestros concatenados ("Preliminares > Excavación").
+// ─────────────────────────────────────────────
+#[derive(Debug, Clone, Serialize, ToSchema, sqlx::FromRow)]
+pub struct PartidaBuscada {
+    pub id:       i32,
+    pub nodo:     String,
+    pub concepto: String,
+    pub nivel:    i32,
+    #[schema(value_type = f64)]
+    pub importe:  Decimal,
+    /// Ruta ancestral ("padre > hijo > nieto"). None si la partida no tiene padres.
+    pub ruta:     Option<String>,
 }

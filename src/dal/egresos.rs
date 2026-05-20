@@ -13,7 +13,8 @@
 //       Se migra a SP dedicado para mantener consistencia
 //       con el resto del DAL.
 
-use crate::domain::models::egresos::Egresos;
+use crate::domain::models::egresos::{EgresoConTotal, Egresos, EgresosFilter};
+use crate::domain::models::lookup::PageOf;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -148,5 +149,38 @@ pub async fn total_egresos(pool: &PgPool, proyecto: i32) -> Result<rust_decimal:
     match result {
         Ok(total) => Ok(total),
         Err(e)    => Err(ReturnCode { codigo: -105, afectado: 0, mensaje: e.to_string() }),
+    }
+}
+
+// ─────────────────────────────────────────────
+// SEARCH — sp_cpa_egresos_search
+// Filtros (proyecto/proveedor/centro_costo/fechas) + ILIKE en
+// referencia/comentario/proveedor/proyecto + paginación.
+// El SP devuelve total_count en cada fila.
+// ─────────────────────────────────────────────
+pub async fn search(pool: &PgPool, f: &EgresosFilter) -> Result<PageOf<Egresos>, ReturnCode> {
+    let rows = sqlx::query_as::<_, EgresoConTotal>(
+        "SELECT * FROM arqeth.sp_cpa_egresos_search($1, $2, $3, $4, $5, $6, $7, $8)"
+    )
+    .bind(f.proyecto)
+    .bind(f.proveedor)
+    .bind(f.centro_costo)
+    .bind(f.fecha_ini)
+    .bind(f.fecha_fin)
+    .bind(f.q.as_deref())
+    .bind(f.offset)
+    .bind(f.limit)
+    .fetch_all(pool)
+    .await;
+
+    match rows {
+        Ok(rows) => {
+            let total = rows.first().map(|r| r.total_count).unwrap_or(0);
+            let size  = if f.limit > 0 { f.limit } else { 25 };
+            let page  = if size > 0 { (f.offset / size) + 1 } else { 1 };
+            let items = rows.into_iter().map(|r| r.egreso).collect();
+            Ok(PageOf { items, total, page, size })
+        }
+        Err(e) => Err(ReturnCode { codigo: -115, afectado: 0, mensaje: e.to_string() }),
     }
 }

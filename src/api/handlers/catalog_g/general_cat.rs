@@ -12,10 +12,11 @@
 //   GET    /general/catalog-types         → obtiene_tipos
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
+use serde::Deserialize;
 use serde_json::{json, Value};
 use tracing::{debug, error, info};
 
@@ -25,6 +26,14 @@ use crate::domain::models::catalog_g::{
     CatalogGInput,
     CatalogGOutput,
 };
+use crate::domain::models::lookup::LookupItem;
+
+#[derive(Debug, Deserialize)]
+pub struct CatalogLookupQuery {
+    pub tipo:  i16,
+    pub q:     Option<String>,
+    pub limit: Option<i32>,
+}
 
 // ─────────────────────────────────────────────
 // ALTA
@@ -304,6 +313,45 @@ pub async fn obtiene_tipos(
         }
         Err(rc) => {
             error!("GET /general/catalog-types ← 500 codigo={}", rc.codigo);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "codigo": rc.codigo, "mensaje": rc.mensaje })))
+        }
+    }
+}
+
+// ─────────────────────────────────────────────
+// LOOKUP — autocomplete dentro de un tipo (5=bancos, 3=tipos persona moral, etc.)
+// GET /general/catalogs/lookup?tipo=5&q=BBV&limit=20
+// ─────────────────────────────────────────────
+#[utoipa::path(
+    get,
+    path = "/general/catalogs/lookup",
+    params(
+        ("tipo"  = i16,            Query, description = "Tipo del catálogo (5=bancos, 3=persona moral, etc.)"),
+        ("q"     = Option<String>, Query, description = "Texto a buscar (ILIKE)"),
+        ("limit" = Option<i32>,    Query, description = "Máximo de resultados (default 20, máx 100)"),
+    ),
+    responses(
+        (status = 200, description = "Lista [{id, etiqueta}]",     body = Value),
+        (status = 500, description = "Error de base de datos",     body = Value),
+    ),
+    tag = "General Catalogs"
+)]
+pub async fn lookup(
+    State(state): State<AppState>,
+    Query(q): Query<CatalogLookupQuery>,
+) -> (StatusCode, Json<Value>) {
+    let qs    = q.q.unwrap_or_default();
+    let limit = q.limit.unwrap_or(20).clamp(1, 100);
+    debug!("GET /general/catalogs/lookup tipo={} q='{}' limit={}", q.tipo, qs, limit);
+
+    match svc::lookup(&state.postgres, q.tipo, &qs, limit).await {
+        Ok(items) => {
+            info!("GET /general/catalogs/lookup ← 200 {} items", items.len());
+            let payload: Vec<LookupItem> = items;
+            (StatusCode::OK, Json(json!(payload)))
+        }
+        Err(rc) => {
+            error!("GET /general/catalogs/lookup ← 500 codigo={}", rc.codigo);
             (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "codigo": rc.codigo, "mensaje": rc.mensaje })))
         }
     }

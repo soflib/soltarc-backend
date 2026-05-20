@@ -13,6 +13,7 @@
 //       Se migra a Vec<Presupuesto>; la capa de presentación construye los controles.
 //       Las variables de seguridad (GpoId, UsrId, UsrNivel) ahora son parámetros explícitos.
 
+use crate::domain::models::lookup::LookupItem;
 use crate::domain::models::presupuesto::Presupuesto;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
@@ -130,5 +131,25 @@ pub async fn carga_presupuestos(
         Ok(lista) if !lista.is_empty() => Ok(lista),
         Ok(_)  => Err(ReturnCode { codigo: -80, afectado: 0, mensaje: "No hay presupuestos disponibles".to_string() }),
         Err(e) => Err(ReturnCode { codigo: -85, afectado: 0, mensaje: e.to_string() }),
+    }
+}
+
+// ─────────────────────────────────────────────
+// LOOKUP — ppto_sp_presupuesto_lookup
+// Acepta filtro opcional por cliente (None = todos).
+// ─────────────────────────────────────────────
+pub async fn lookup(pool: &PgPool, q: &str, cliente: Option<i32>, limit: i32) -> Result<Vec<LookupItem>, ReturnCode> {
+    let result = sqlx::query_as::<_, LookupItem>(
+        "SELECT id, etiqueta FROM arqeth.ppto_sp_presupuesto_lookup($1, $2, $3)"
+    )
+    .bind(q)
+    .bind(cliente)
+    .bind(limit)
+    .fetch_all(pool)
+    .await;
+
+    match result {
+        Ok(lista) => Ok(lista),
+        Err(e)    => Err(ReturnCode { codigo: -95, afectado: 0, mensaje: e.to_string() }),
     }
 }

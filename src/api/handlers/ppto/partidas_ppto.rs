@@ -19,10 +19,21 @@ use serde_json::{json, Value};
 use utoipa::ToSchema;
 use tracing::{debug, error, info};
 
-use crate::domain::models::partidas_ppto::PartidasPpto;
+use crate::domain::models::partidas_ppto::{PartidaBuscada, PartidasPpto};
 use crate::infrastructure::db::app_state::AppState;
 use crate::infrastructure::render;
 use crate::services::ppto::partidas_ppto as svc;
+
+#[derive(Debug, Deserialize)]
+pub struct ArbolQuery {
+    pub presupuesto: i32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BuscarQuery {
+    pub presupuesto: i32,
+    pub q:           Option<String>,
+}
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct PartidasPptoInput {
@@ -382,6 +393,83 @@ pub async fn carga_2_nivel(
         }
         Err(rc) => {
             error!("GET /ppto/partidas/nivel2 ← 500 codigo={}", rc.codigo);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "codigo": rc.codigo, "mensaje": rc.mensaje })))
+        }
+    }
+}
+
+// ── Árbol WBS del presupuesto ─────────────────────────────────────────────────
+//
+// GET /ppto/partidas/arbol?presupuesto=X
+// Devuelve la lista plana con `nivel` calculado; el frontend reconstruye la
+// jerarquía partiendo el campo `nodo` (formato "/<ppto>/<n1>/.../<nN>/").
+
+#[utoipa::path(
+    get,
+    path = "/ppto/partidas/arbol",
+    params(("presupuesto" = i32, Query, description = "Id del presupuesto")),
+    responses(
+        (status = 200, description = "Árbol de partidas",       body = Value),
+        (status = 500, description = "Error de base de datos",  body = Value),
+    ),
+    tag = "PptoPresupuestos"
+)]
+pub async fn arbol(
+    State(state): State<AppState>,
+    Query(q): Query<ArbolQuery>,
+) -> (StatusCode, Json<Value>) {
+    debug!(presupuesto = q.presupuesto, "GET /ppto/partidas/arbol");
+
+    match svc::arbol(&state.postgres, q.presupuesto).await {
+        Ok(lista) => {
+            info!("GET /ppto/partidas/arbol?presupuesto={} ← 200 {} nodos", q.presupuesto, lista.len());
+            let items: Vec<Value> = lista.iter().map(partida_json).collect();
+            (StatusCode::OK, Json(json!({ "items": items, "total": items.len() })))
+        }
+        Err(rc) if rc.codigo > -115 => {
+            info!("GET /ppto/partidas/arbol?presupuesto={} ← 200 vacío", q.presupuesto);
+            (StatusCode::OK, Json(json!({ "items": [], "total": 0 })))
+        }
+        Err(rc) => {
+            error!("GET /ppto/partidas/arbol?presupuesto={} ← 500 codigo={}", q.presupuesto, rc.codigo);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "codigo": rc.codigo, "mensaje": rc.mensaje })))
+        }
+    }
+}
+
+// ── Búsqueda por concepto en un presupuesto ───────────────────────────────────
+//
+// GET /ppto/partidas/buscar?presupuesto=X&q=excav
+// Devuelve filas planas con `ruta` ancestral ("Preliminares > Excavación").
+
+#[utoipa::path(
+    get,
+    path = "/ppto/partidas/buscar",
+    params(
+        ("presupuesto" = i32,            Query, description = "Id del presupuesto"),
+        ("q"           = Option<String>, Query, description = "Texto a buscar en el concepto (ILIKE)"),
+    ),
+    responses(
+        (status = 200, description = "Lista de coincidencias con ruta", body = Value),
+        (status = 500, description = "Error de base de datos",          body = Value),
+    ),
+    tag = "PptoPresupuestos"
+)]
+pub async fn buscar(
+    State(state): State<AppState>,
+    Query(q): Query<BuscarQuery>,
+) -> (StatusCode, Json<Value>) {
+    let texto = q.q.unwrap_or_default();
+    debug!(presupuesto = q.presupuesto, q = %texto, "GET /ppto/partidas/buscar");
+
+    match svc::buscar(&state.postgres, q.presupuesto, &texto).await {
+        Ok(lista) => {
+            info!("GET /ppto/partidas/buscar ← 200 {} items", lista.len());
+            let payload: Vec<PartidaBuscada> = lista;
+            (StatusCode::OK, Json(json!({ "items": payload, "total": payload.len() })))
+        }
+        Err(rc) => {
+            error!("GET /ppto/partidas/buscar ← 500 codigo={}", rc.codigo);
             (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "codigo": rc.codigo, "mensaje": rc.mensaje })))
         }
     }

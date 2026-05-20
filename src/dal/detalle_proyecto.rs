@@ -17,7 +17,7 @@
 //   sp_cpa_DetProyADDQry              → consulta partidas faltantes
 //   sp_cpa_DetProyADDFaltantes        → adiciona partidas faltantes
 
-use crate::domain::models::detalle_proyectos::DetalleProyectos;
+use crate::domain::models::detalle_proyectos::{DetalleProyectos, NodoArbol};
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
 use time::Date;
@@ -291,5 +291,45 @@ pub async fn adiciona_partidas_faltantes(pool: &PgPool, origen: i32, destino: i3
         Ok(n) if n > 0 => ReturnCode { codigo: 40,  afectado: n, mensaje: "Ok".to_string() },
         Ok(_)          => ReturnCode { codigo: -41, afectado: 0, mensaje: "No hay partidas en origen o destino para agregar".to_string() },
         Err(e)         => ReturnCode { codigo: -45, afectado: 0, mensaje: e.to_string() },
+    }
+}
+
+// ─────────────────────────────────────────────
+// ARBOL WBS — sp_cpa_detalleproy_arbol
+// Devuelve el árbol completo con `ruta` = NULL.
+// El SELECT añade "NULL::TEXT AS ruta" para que el sqlx FromRow encaje
+// con la misma struct (NodoArbol) que usa `buscar`.
+// ─────────────────────────────────────────────
+pub async fn arbol(pool: &PgPool, proyecto: i32) -> Result<Vec<NodoArbol>, ReturnCode> {
+    let result = sqlx::query_as::<_, NodoArbol>(
+        "SELECT t.*, NULL::TEXT AS ruta FROM arqeth.sp_cpa_detalleproy_arbol($1) t"
+    )
+    .bind(proyecto)
+    .fetch_all(pool)
+    .await;
+
+    match result {
+        Ok(lista) => Ok(lista),
+        Err(e)    => Err(ReturnCode { codigo: -55, afectado: 0, mensaje: e.to_string() }),
+    }
+}
+
+// ─────────────────────────────────────────────
+// BUSCAR WBS — sp_cpa_detalleproy_buscar
+// Búsqueda por descripción dentro del WBS del proyecto, devolviendo `ruta`
+// con los descripciones ancestrales concatenadas.
+// ─────────────────────────────────────────────
+pub async fn buscar(pool: &PgPool, proyecto: i32, texto: &str) -> Result<Vec<NodoArbol>, ReturnCode> {
+    let result = sqlx::query_as::<_, NodoArbol>(
+        "SELECT * FROM arqeth.sp_cpa_detalleproy_buscar($1, $2)"
+    )
+    .bind(proyecto)
+    .bind(texto)
+    .fetch_all(pool)
+    .await;
+
+    match result {
+        Ok(lista) => Ok(lista),
+        Err(e)    => Err(ReturnCode { codigo: -56, afectado: 0, mensaje: e.to_string() }),
     }
 }

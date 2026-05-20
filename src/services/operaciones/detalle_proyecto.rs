@@ -6,7 +6,7 @@
 //   crate::dal::detalle_proyecto::*
 
 use crate::dal::detalle_proyecto as dal;
-use crate::domain::models::detalle_proyectos::DetalleProyectos;
+use crate::domain::models::detalle_proyectos::{DetalleProyectos, NodoArbol};
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
 use time::Date;
@@ -76,6 +76,23 @@ pub async fn carga_nivel(pool: &PgPool, proyecto: i32, nivel: i32) -> Result<Vec
     } else {
         Ok(filtrada)
     }
+}
+
+// ─────────────────────────────────────────────
+// ARBOL — árbol WBS del proyecto con id, nodo, descripcion, nivel, importe, estado.
+// Reemplaza la necesidad de combinar partidas_proyecto + carga_tareas
+// para construir el árbol en el frontend.
+// ─────────────────────────────────────────────
+pub async fn arbol(pool: &PgPool, proyecto: i32) -> Result<Vec<NodoArbol>, ReturnCode> {
+    dal::arbol(pool, proyecto).await
+}
+
+// ─────────────────────────────────────────────
+// BUSCAR — búsqueda por descripción dentro del WBS del proyecto, devolviendo
+// `ruta` con las descripciones ancestrales concatenadas.
+// ─────────────────────────────────────────────
+pub async fn buscar(pool: &PgPool, proyecto: i32, texto: &str) -> Result<Vec<NodoArbol>, ReturnCode> {
+    dal::buscar(pool, proyecto, texto).await
 }
 
 // ── CSV import ────────────────────────────────────────────────────────────────

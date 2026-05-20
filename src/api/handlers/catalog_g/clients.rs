@@ -22,6 +22,7 @@ use utoipa::ToSchema;
 use tracing::{debug, error, info};
 
 use crate::domain::models::clients::Clientes;
+use crate::domain::models::lookup::LookupItem;
 use crate::infrastructure::db::app_state::AppState;
 use crate::services::catalog_g::clients as svc;
 
@@ -42,6 +43,12 @@ pub struct ClienteInput {
 #[derive(Debug, Deserialize)]
 pub struct FiltroActivos {
     pub activos: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LookupQuery {
+    pub q:     Option<String>,
+    pub limit: Option<i32>,
 }
 
 // ─────────────────────────────────────────────
@@ -329,6 +336,44 @@ pub async fn obtiene_tipos(
         Err(ret) => {
             info!("GET /catalog/clients/tipos ← 404");
             (StatusCode::NOT_FOUND, Json(json!({ "codigo": ret.codigo, "mensaje": ret.mensaje })))
+        }
+    }
+}
+
+// ─────────────────────────────────────────────
+// LOOKUP — autocomplete clientes activos
+// GET /catalog/clients/lookup?q=foo&limit=20
+// ─────────────────────────────────────────────
+#[utoipa::path(
+    get,
+    path = "/catalog/clients/lookup",
+    params(
+        ("q"     = Option<String>, Query, description = "Texto a buscar (ILIKE, default '')"),
+        ("limit" = Option<i32>,    Query, description = "Máximo de resultados (default 20, máx 100)"),
+    ),
+    responses(
+        (status = 200, description = "Lista [{id, etiqueta}]",      body = Value),
+        (status = 500, description = "Error de base de datos",      body = Value),
+    ),
+    tag = "Clients"
+)]
+pub async fn lookup(
+    State(state): State<AppState>,
+    Query(q): Query<LookupQuery>,
+) -> (StatusCode, Json<Value>) {
+    let qs    = q.q.unwrap_or_default();
+    let limit = q.limit.unwrap_or(20).clamp(1, 100);
+    debug!("GET /catalog/clients/lookup q='{}' limit={}", qs, limit);
+
+    match svc::lookup(&state.postgres, &qs, limit).await {
+        Ok(items) => {
+            info!("GET /catalog/clients/lookup ← 200 {} items", items.len());
+            let payload: Vec<LookupItem> = items;
+            (StatusCode::OK, Json(json!(payload)))
+        }
+        Err(ret) => {
+            error!("GET /catalog/clients/lookup ← 500 codigo={}", ret.codigo);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "codigo": ret.codigo, "mensaje": ret.mensaje })))
         }
     }
 }

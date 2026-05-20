@@ -6,7 +6,7 @@
 // en los SPs _qry y _lstall. Son None en escrituras (alta/cambios).
 // Ver PATRON_NOMBRES.txt en la raíz del proyecto.
 
-use chrono::NaiveDateTime;
+use chrono::{NaiveDate, NaiveDateTime};
 use rust_decimal::Decimal;
 use uuid::Uuid;
 use utoipa::ToSchema;
@@ -29,4 +29,27 @@ pub struct Ingresos {
     pub cliente: i32,                    // FK → cpa_clientes
     pub cliente_nombre: Option<String>,  // resuelto por SP vía LEFT JOIN
     pub usuario_ms: Uuid,
+}
+
+// ─────────────────────────────────────────────
+// Búsqueda paginada (sp_cpa_ingresos_search)
+// El SP devuelve una columna extra `total_count` con COUNT(*) OVER ()
+// repetido en cada fila para evitar un segundo viaje al servidor.
+// ─────────────────────────────────────────────
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct IngresoConTotal {
+    #[sqlx(flatten)]
+    pub ingreso:     Ingresos,
+    pub total_count: i64,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct IngresosFilter {
+    pub proyecto:  Option<i32>,
+    pub cliente:   Option<i32>,
+    pub fecha_ini: Option<NaiveDate>,
+    pub fecha_fin: Option<NaiveDate>,
+    pub q:         Option<String>,
+    pub offset:    i32,
+    pub limit:     i32,
 }

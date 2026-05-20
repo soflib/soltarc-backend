@@ -22,6 +22,7 @@ use crate::domain::models::catalog_g::{
     CatalogGInput,
     CatalogG,
 };
+use crate::domain::models::lookup::LookupItem;
 use sqlx::PgPool;
 
 // ─────────────────────────────────────────────
@@ -87,4 +88,12 @@ pub async fn obtiene_por_tipo(pool: &PgPool, tipo: i32) -> Result<Vec<CatalogG>,
 
 pub async fn obtiene_tipos(pool: &PgPool) -> Result<Vec<CatalogG>, ReturnCode> {
     svc::obtiene_tipos(pool).await
+}
+
+// ─────────────────────────────────────────────
+// LOOKUP — autocomplete catálogo por tipo
+// Ej: tipo=5 → bancos, tipo=3 → tipos persona moral
+// ─────────────────────────────────────────────
+pub async fn lookup(pool: &PgPool, tipo: i16, q: &str, limit: i32) -> Result<Vec<LookupItem>, ReturnCode> {
+    svc::lookup(pool, tipo, q, limit).await
 }

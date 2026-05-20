@@ -3,6 +3,7 @@
 // Origen.....: oPresupuesto.cs
 
 use crate::dal::presupuesto as dal;
+use crate::domain::models::lookup::LookupItem;
 use crate::domain::models::presupuesto::Presupuesto;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
@@ -31,4 +32,11 @@ pub async fn carga_pptos(
     activos: bool,
 ) -> Result<Vec<Presupuesto>, ReturnCode> {
     dal::carga_presupuestos(pool, gpo_neg, gpo_user_id, usr_nivel, activos).await
+}
+
+// ─────────────────────────────────────────────
+// LOOKUP — autocomplete presupuestos activos, filtrable por cliente
+// ─────────────────────────────────────────────
+pub async fn lookup(pool: &PgPool, q: &str, cliente: Option<i32>, limit: i32) -> Result<Vec<LookupItem>, ReturnCode> {
+    dal::lookup(pool, q, cliente, limit).await
 }

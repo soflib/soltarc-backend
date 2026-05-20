@@ -162,3 +162,5 @@ credentials.json
 
 **/certs/
 **/target/
+
+**/env/

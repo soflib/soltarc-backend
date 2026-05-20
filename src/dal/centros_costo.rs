@@ -10,6 +10,7 @@
 //   sp_cpa_CentrosCostosLstAll  → lista todos
 
 use crate::domain::models::centros_costo::CentrosCosto;
+use crate::domain::models::lookup::LookupItem;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
 
@@ -106,5 +107,23 @@ pub async fn obtiene_todo(pool: &PgPool, activos: bool) -> Result<Vec<CentrosCos
         Ok(lista) if !lista.is_empty() => Ok(lista),
         Ok(_)  => Err(ReturnCode { codigo: -51, afectado: 0, mensaje: "No hay centros de costo".to_string() }),
         Err(e) => Err(ReturnCode { codigo: -55, afectado: 0, mensaje: e.to_string() }),
+    }
+}
+
+// ─────────────────────────────────────────────
+// LOOKUP — sp_cpa_centroscosto_lookup
+// ─────────────────────────────────────────────
+pub async fn lookup(pool: &PgPool, q: &str, limit: i32) -> Result<Vec<LookupItem>, ReturnCode> {
+    let result = sqlx::query_as::<_, LookupItem>(
+        "SELECT id, etiqueta FROM arqeth.sp_cpa_centroscosto_lookup($1, $2)"
+    )
+    .bind(q)
+    .bind(limit)
+    .fetch_all(pool)
+    .await;
+
+    match result {
+        Ok(lista) => Ok(lista),
+        Err(e)    => Err(ReturnCode { codigo: -65, afectado: 0, mensaje: e.to_string() }),
     }
 }

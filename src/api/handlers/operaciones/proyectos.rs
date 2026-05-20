@@ -25,9 +25,16 @@ use serde_json::{json, Value};
 use utoipa::ToSchema;
 use tracing::{debug, error, info};
 
+use crate::domain::models::lookup::LookupItem;
 use crate::domain::models::proyectos::Proyectos;
 use crate::infrastructure::db::app_state::AppState;
 use crate::services::operaciones::proyectos as svc;
+
+#[derive(Debug, Deserialize)]
+pub struct ProyLookupQuery {
+    pub q:     Option<String>,
+    pub limit: Option<i32>,
+}
 
 // ─────────────────────────────────────────────
 // INPUT STRUCTS
@@ -503,6 +510,45 @@ pub async fn total_ppto(
         Err(ret) => {
             info!("GET /operaciones/proyectos/{}/total-ppto ← 404", id);
             (StatusCode::NOT_FOUND, Json(json!({ "codigo": ret.codigo, "mensaje": ret.mensaje })))
+        }
+    }
+}
+
+// ─────────────────────────────────────────────
+// LOOKUP — autocomplete proyectos activos
+// Etiqueta: "<nombre proyecto> — <cliente>"
+// GET /operaciones/proyectos/lookup?q=foo&limit=20
+// ─────────────────────────────────────────────
+#[utoipa::path(
+    get,
+    path = "/operaciones/proyectos/lookup",
+    params(
+        ("q"     = Option<String>, Query, description = "Texto a buscar (ILIKE — busca en nombre del proyecto y nombre del cliente)"),
+        ("limit" = Option<i32>,    Query, description = "Máximo de resultados (default 20, máx 100)"),
+    ),
+    responses(
+        (status = 200, description = "Lista [{id, etiqueta}]",     body = Value),
+        (status = 500, description = "Error de base de datos",     body = Value),
+    ),
+    tag = "Proyectos"
+)]
+pub async fn lookup(
+    State(state): State<AppState>,
+    Query(q): Query<ProyLookupQuery>,
+) -> (StatusCode, Json<Value>) {
+    let qs    = q.q.unwrap_or_default();
+    let limit = q.limit.unwrap_or(20).clamp(1, 100);
+    debug!("GET /operaciones/proyectos/lookup q='{}' limit={}", qs, limit);
+
+    match svc::lookup(&state.postgres, &qs, limit).await {
+        Ok(items) => {
+            info!("GET /operaciones/proyectos/lookup ← 200 {} items", items.len());
+            let payload: Vec<LookupItem> = items;
+            (StatusCode::OK, Json(json!(payload)))
+        }
+        Err(ret) => {
+            error!("GET /operaciones/proyectos/lookup ← 500 codigo={}", ret.codigo);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "codigo": ret.codigo, "mensaje": ret.mensaje })))
         }
     }
 }

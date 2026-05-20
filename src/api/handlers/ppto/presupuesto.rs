@@ -15,9 +15,17 @@ use serde_json::{json, Value};
 use utoipa::ToSchema;
 use tracing::{debug, error, info};
 
+use crate::domain::models::lookup::LookupItem;
 use crate::domain::models::presupuesto::Presupuesto;
 use crate::infrastructure::db::app_state::AppState;
 use crate::services::ppto::presupuesto as svc;
+
+#[derive(Debug, Deserialize)]
+pub struct PptoLookupQuery {
+    pub q:       Option<String>,
+    pub cliente: Option<i32>,
+    pub limit:   Option<i32>,
+}
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct PresupuestoInput {
@@ -247,6 +255,46 @@ pub async fn carga_pptos(
         }
         Err(rc) => {
             error!("GET /ppto/presupuestos ← 500 codigo={}", rc.codigo);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "codigo": rc.codigo, "mensaje": rc.mensaje })))
+        }
+    }
+}
+
+// ─────────────────────────────────────────────
+// LOOKUP — autocomplete presupuestos activos
+// Filtro opcional por cliente.
+// GET /ppto/presupuestos/lookup?q=foo&cliente=17&limit=20
+// ─────────────────────────────────────────────
+#[utoipa::path(
+    get,
+    path = "/ppto/presupuestos/lookup",
+    params(
+        ("q"       = Option<String>, Query, description = "Texto a buscar (ILIKE)"),
+        ("cliente" = Option<i32>,    Query, description = "Filtra por cliente (omitir = todos)"),
+        ("limit"   = Option<i32>,    Query, description = "Máximo de resultados (default 20, máx 100)"),
+    ),
+    responses(
+        (status = 200, description = "Lista [{id, etiqueta}]",     body = Value),
+        (status = 500, description = "Error de base de datos",     body = Value),
+    ),
+    tag = "PptoPresupuestos"
+)]
+pub async fn lookup(
+    State(state): State<AppState>,
+    Query(q): Query<PptoLookupQuery>,
+) -> (StatusCode, Json<Value>) {
+    let qs    = q.q.unwrap_or_default();
+    let limit = q.limit.unwrap_or(20).clamp(1, 100);
+    debug!("GET /ppto/presupuestos/lookup q='{}' cliente={:?} limit={}", qs, q.cliente, limit);
+
+    match svc::lookup(&state.postgres, &qs, q.cliente, limit).await {
+        Ok(items) => {
+            info!("GET /ppto/presupuestos/lookup ← 200 {} items", items.len());
+            let payload: Vec<LookupItem> = items;
+            (StatusCode::OK, Json(json!(payload)))
+        }
+        Err(rc) => {
+            error!("GET /ppto/presupuestos/lookup ← 500 codigo={}", rc.codigo);
             (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "codigo": rc.codigo, "mensaje": rc.mensaje })))
         }
     }

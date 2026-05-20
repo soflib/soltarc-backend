@@ -10,6 +10,7 @@
 //   sp_cpa_ClientesLstAct → lista activos / todos
 
 use crate::domain::models::clients::Clientes;
+use crate::domain::models::lookup::LookupItem;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
 
@@ -137,5 +138,24 @@ pub async fn obtiene_clientes(pool: &PgPool, activos: bool) -> Result<Vec<Client
         Ok(lista) if !lista.is_empty() => Ok(lista),
         Ok(_)  => Err(ReturnCode { codigo: -30, afectado: 0, mensaje: "No hay clientes".to_string() }),
         Err(e) => Err(ReturnCode { codigo: -35, afectado: 0, mensaje: e.to_string() }),
+    }
+}
+
+// ─────────────────────────────────────────────
+// LOOKUP — sp_cpa_clientes_lookup
+// Autocomplete: devuelve (id, etiqueta) para alimentar un combobox.
+// ─────────────────────────────────────────────
+pub async fn lookup(pool: &PgPool, q: &str, limit: i32) -> Result<Vec<LookupItem>, ReturnCode> {
+    let result = sqlx::query_as::<_, LookupItem>(
+        "SELECT id, etiqueta FROM arqeth.sp_cpa_clientes_lookup($1, $2)"
+    )
+    .bind(q)
+    .bind(limit)
+    .fetch_all(pool)
+    .await;
+
+    match result {
+        Ok(lista) => Ok(lista),
+        Err(e)    => Err(ReturnCode { codigo: -55, afectado: 0, mensaje: e.to_string() }),
     }
 }

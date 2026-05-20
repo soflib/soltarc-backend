@@ -7,7 +7,8 @@
 //                          carga_egresos_proy_xref, total_egresos}
 
 use crate::dal::egresos as dal;
-use crate::domain::models::egresos::Egresos;
+use crate::domain::models::egresos::{Egresos, EgresosFilter};
+use crate::domain::models::lookup::PageOf;
 use crate::infrastructure::db::return_code::ReturnCode;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
@@ -34,4 +35,12 @@ pub async fn carga_egresos_proy_xref(pool: &PgPool, proyecto: i32) -> Result<Vec
 
 pub async fn total_egresos(pool: &PgPool, proyecto: i32) -> Result<Decimal, ReturnCode> {
     dal::total_egresos(pool, proyecto).await
+}
+
+// ─────────────────────────────────────────────
+// SEARCH — listado paginado con filtros (proyecto/proveedor/centro_costo/
+//          fechas) + texto libre (ILIKE en referencia/comentario/proveedor/proyecto).
+// ─────────────────────────────────────────────
+pub async fn search(pool: &PgPool, filtros: &EgresosFilter) -> Result<PageOf<Egresos>, ReturnCode> {
+    dal::search(pool, filtros).await
 }
