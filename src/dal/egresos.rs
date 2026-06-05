@@ -125,10 +125,11 @@ pub async fn carga_egresos_proy_xref(pool: &PgPool, proyecto: i32) -> Result<Vec
     .fetch_all(pool)
     .await;
 
+    // Lista vacía es respuesta válida (proyecto sin egresos), no error.
+    // El handler la convierte en 200 con egresos: [].
     match result {
-        Ok(lista) if !lista.is_empty() => Ok(lista),
-        Ok(_)  => Err(ReturnCode { codigo: -91, afectado: 0, mensaje: "No hay egresos para el proyecto".to_string() }),
-        Err(e) => Err(ReturnCode { codigo: -95, afectado: 0, mensaje: e.to_string() }),
+        Ok(lista) => Ok(lista),
+        Err(e)    => Err(ReturnCode { codigo: -95, afectado: 0, mensaje: e.to_string() }),
     }
 }
 

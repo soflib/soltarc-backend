@@ -51,6 +51,7 @@ pub struct FiltroAvance {
 
 #[derive(Debug, Deserialize)]
 pub struct FiltroNodo {
+    pub proyecto: Option<i32>,
     pub nodo: Option<String>,
 }
 
@@ -82,6 +83,8 @@ fn parse_input(body: PlanObraInput) -> Result<PlanObra, String> {
         estado:       body.estado,
         comentarios:  String::new(),
         fecha_termina: parse_dt(&body.fecha_termina, "fecha_termina")?,
+        nodo:         String::new(), // no aplica en la actualización por id
+        descripcion:  String::new(),
     })
 }
 
@@ -93,6 +96,8 @@ fn plan_obra_json(p: &PlanObra) -> Value {
         "estado":        p.estado,
         "comentarios":   p.comentarios,
         "fecha_termina": p.fecha_termina.format("%Y-%m-%d").to_string(),
+        "nodo":          p.nodo,
+        "descripcion":   p.descripcion,
     })
 }
 
@@ -332,9 +337,13 @@ pub async fn descendientes_nodo(
         Some(ref n) if !n.is_empty() => n.clone(),
         _ => return (StatusCode::BAD_REQUEST, Json(json!({ "codigo": -1, "mensaje": "Falta parámetro: nodo" }))),
     };
-    debug!("GET /plan-obra/descendientes?nodo={}", nodo);
+    let proyecto = match q.proyecto {
+        Some(p) => p,
+        None => return (StatusCode::BAD_REQUEST, Json(json!({ "codigo": -1, "mensaje": "Falta parámetro: proyecto" }))),
+    };
+    debug!("GET /plan-obra/descendientes?proyecto={}&nodo={}", proyecto, nodo);
 
-    match svc::descendientes_nodo(&state.postgres, &nodo).await {
+    match svc::descendientes_nodo(&state.postgres, proyecto, &nodo).await {
         Ok(lista) => {
             info!("GET /plan-obra/descendientes ← 200 {} nodos", lista.len());
             (StatusCode::OK, Json(json!(lista.iter().map(plan_obra_json).collect::<Vec<_>>())))

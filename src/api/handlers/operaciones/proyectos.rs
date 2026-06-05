@@ -16,6 +16,7 @@
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
+    Extension,
     Json,
 };
 use chrono::NaiveDateTime;
@@ -25,6 +26,7 @@ use serde_json::{json, Value};
 use utoipa::ToSchema;
 use tracing::{debug, error, info};
 
+use crate::api::middleware::roles::AuthUser;
 use crate::domain::models::lookup::LookupItem;
 use crate::domain::models::proyectos::Proyectos;
 use crate::infrastructure::db::app_state::AppState;
@@ -32,8 +34,9 @@ use crate::services::operaciones::proyectos as svc;
 
 #[derive(Debug, Deserialize)]
 pub struct ProyLookupQuery {
-    pub q:     Option<String>,
-    pub limit: Option<i32>,
+    pub q:       Option<String>,
+    pub cliente: Option<i32>,   // filtro opcional: solo proyectos de este cliente
+    pub limit:   Option<i32>,
 }
 
 // ─────────────────────────────────────────────
@@ -104,6 +107,7 @@ fn parse_input(body: ProyectosInput) -> Result<Proyectos, String> {
         gn_id:        body.gn_id,
         gn_usr_id:    body.gn_usr_id,
         dir_imagenes: body.dir_imagenes,
+        tenant_id:    None, // lo fija el SP a partir del p_tenant_id
     })
 }
 
@@ -143,9 +147,15 @@ fn proyecto_json(p: &Proyectos) -> Value {
 )]
 pub async fn alta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<ProyectosInput>,
 ) -> (StatusCode, Json<Value>) {
     info!("POST /operaciones/proyectos → nombre='{}'", body.nombre);
+
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
 
     let proy = match parse_input(body) {
         Ok(p) => p,
@@ -155,7 +165,7 @@ pub async fn alta(
         }
     };
 
-    let ret = svc::alta(&state.postgres, &proy).await;
+    let ret = svc::alta(&state.postgres, &proy, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("POST /operaciones/proyectos ← 201 afectado={}", ret.afectado);
@@ -181,11 +191,17 @@ pub async fn alta(
 )]
 pub async fn baja(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     info!("DELETE /operaciones/proyectos/{}", id);
 
-    let ret = svc::baja(&state.postgres, id).await;
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    let ret = svc::baja(&state.postgres, id, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("DELETE /operaciones/proyectos/{} ← 200 OK", id);
@@ -211,6 +227,7 @@ pub async fn baja(
 )]
 pub async fn cambio(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<ProyectosInput>,
 ) -> (StatusCode, Json<Value>) {
     info!("PUT /operaciones/proyectos → id={:?} nombre='{}'", body.id, body.nombre);
@@ -223,6 +240,11 @@ pub async fn cambio(
         );
     };
 
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
     let proy = match parse_input(body) {
         Ok(p) => p,
         Err(msg) => {
@@ -231,7 +253,7 @@ pub async fn cambio(
         }
     };
 
-    let ret = svc::cambio(&state.postgres, &proy).await;
+    let ret = svc::cambio(&state.postgres, &proy, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("PUT /operaciones/proyectos ← 200 OK afectado={}", ret.afectado);
@@ -258,11 +280,17 @@ pub async fn cambio(
 )]
 pub async fn consulta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /operaciones/proyectos/{}", id);
 
-    match svc::consulta(&state.postgres, id).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::consulta(&state.postgres, id, tenant_id).await {
         Ok(Some(p)) => {
             info!("GET /operaciones/proyectos/{} ← 200 nombre='{}'", id, p.nombre);
             (StatusCode::OK, Json(proyecto_json(&p)))
@@ -294,21 +322,31 @@ pub async fn consulta(
 )]
 pub async fn lista(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(filtro): Query<FiltroActivos>,
 ) -> (StatusCode, Json<Value>) {
     let activos = filtro.activos.unwrap_or(true);
     debug!("GET /operaciones/proyectos?activos={}", activos);
 
-    match svc::llena_proyectos(&state.postgres, activos).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::llena_proyectos(&state.postgres, activos, tenant_id).await {
         Ok(lista) => {
             info!("GET /operaciones/proyectos ← 200 {} proyectos", lista.len());
             (StatusCode::OK, Json(json!(lista.iter().map(|p| json!({
                 "id":          p.id,
+                "tipo":        p.tipo,
                 "nombre":      p.nombre,
+                "descripcion": p.descripcion,
+                "direccion":   p.direccion,
                 "estado":      p.estado,
                 "presupuesto": p.presupuesto.to_string(),
                 "fecha_ini":   p.fecha_ini.format("%Y-%m-%d").to_string(),
                 "fecha_fin":   p.fecha_fin.format("%Y-%m-%d").to_string(),
+                "asignado":    p.asignado,
                 "cliente":     p.cliente,
                 "activo":      p.activo,
                 "gn_id":       p.gn_id,
@@ -534,13 +572,19 @@ pub async fn total_ppto(
 )]
 pub async fn lookup(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<ProyLookupQuery>,
 ) -> (StatusCode, Json<Value>) {
     let qs    = q.q.unwrap_or_default();
     let limit = q.limit.unwrap_or(20).clamp(1, 100);
-    debug!("GET /operaciones/proyectos/lookup q='{}' limit={}", qs, limit);
+    debug!("GET /operaciones/proyectos/lookup q='{}' cliente={:?} limit={}", qs, q.cliente, limit);
 
-    match svc::lookup(&state.postgres, &qs, limit).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::lookup(&state.postgres, &qs, q.cliente, limit, tenant_id).await {
         Ok(items) => {
             info!("GET /operaciones/proyectos/lookup ← 200 {} items", items.len());
             let payload: Vec<LookupItem> = items;

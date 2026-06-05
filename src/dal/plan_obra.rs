@@ -147,10 +147,15 @@ pub async fn crea_plan(
 // qué partidas hija serán afectadas antes de
 // llamar a ActualizaFechas (ya en Part B DAL).
 // ─────────────────────────────────────────────
-pub async fn descendientes_nodo(pool: &PgPool, nodo: &str) -> Result<Vec<PlanObra>, ReturnCode> {
+pub async fn descendientes_nodo(pool: &PgPool, proyecto: i32, nodo: &str) -> Result<Vec<PlanObra>, ReturnCode> {
+    // La SP devuelve la forma completa de cpa_detalle_proyectos (fecha_inicio, etc.);
+    // seleccionamos y aliasamos las columnas que espera PlanObra.
+    // p_proyecto acota a un solo proyecto (los nodos se repiten entre proyectos).
     let result = sqlx::query_as::<_, PlanObra>(
-        "SELECT * FROM arqeth.pdo_sp_PartidasFecDep_QRYUPDdes($1)"
+        "SELECT id, fecha_inicio AS fecha_ini, fecha_fin, estado, comentarios, fecha_termina, nodo, descripcion \
+         FROM arqeth.pdo_sp_PartidasFecDep_QRYUPDdes($1, $2)"
     )
+    .bind(proyecto)
     .bind(nodo)
     .fetch_all(pool)
     .await;

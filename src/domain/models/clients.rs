@@ -7,7 +7,11 @@
 // Ver PATRON_NOMBRES.txt en la raíz del proyecto.
 
 use utoipa::ToSchema;
+use uuid::Uuid;
 
+// tenant_id semántica:
+//   None       → cliente GLOBAL del sistema (no editable desde la app)
+//   Some(uuid) → cliente PRIVADO del tenant
 #[derive(Debug, Clone, ToSchema, sqlx::FromRow)]
 pub struct Clientes {
     pub id: i32,
@@ -21,4 +25,5 @@ pub struct Clientes {
     pub tipo_nombre: Option<String>, // resuelto por SP vía LEFT JOIN
     pub activo: bool,
     pub condiciones: String,
+    pub tenant_id: Option<Uuid>,
 }

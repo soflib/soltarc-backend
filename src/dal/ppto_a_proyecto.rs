@@ -22,17 +22,19 @@ use time::Date;
 //   SELECT COUNT(*) FROM cpa_DetalleProyectos WHERE prd_Proyecto = $1
 // ─────────────────────────────────────────────
 pub async fn consulta_numero_partidas(pool: &PgPool, proyecto: i32) -> ReturnCode {
-    let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_ProyectoConteoPartidas($1)"
+    // El SP es RETURNS TABLE(codigo, mensaje, afectado): hay que leer columnas,
+    // no decodificar como escalar. `afectado` trae el COUNT.
+    let result = sqlx::query_as::<_, (i32, String, i32)>(
+        "SELECT codigo, mensaje, afectado FROM arqeth.sp_cpa_ProyectoConteoPartidas($1)"
     )
     .bind(proyecto)
     .fetch_one(pool)
     .await;
 
     match result {
-        Ok(n) if n > 0 => ReturnCode { codigo: 10,  afectado: n, mensaje: "El proyecto tiene registros".to_string() },
-        Ok(_)          => ReturnCode { codigo: 11,  afectado: 0, mensaje: "El proyecto está vacío proceda".to_string() },
-        Err(e)         => ReturnCode { codigo: -15, afectado: -1, mensaje: e.to_string() },
+        Ok((_, _, n)) if n > 0 => ReturnCode { codigo: 10,  afectado: n, mensaje: "El proyecto tiene registros".to_string() },
+        Ok((_, _, _))          => ReturnCode { codigo: 11,  afectado: 0, mensaje: "El proyecto está vacío proceda".to_string() },
+        Err(e)                 => ReturnCode { codigo: -15, afectado: -1, mensaje: e.to_string() },
     }
 }
 
@@ -49,9 +51,10 @@ pub async fn carga_nodos(pool: &PgPool, ppto: i32, proyecto: i32) -> Result<Vec<
     .await;
 
     match result {
-        Ok(lista) if !lista.is_empty() => Ok(lista),
-        Ok(_)  => Err(ReturnCode { codigo: -21, afectado: 0, mensaje: "No hay partidas en el presupuesto".to_string() }),
-        Err(e) => Err(ReturnCode { codigo: -25, afectado: 0, mensaje: e.to_string() }),
+        // Lista vacía NO es error (puede que ya estén todas aplicadas al proyecto).
+        // Solo un error real de BD es Err → el handler lo expone como 500, no 404.
+        Ok(lista) => Ok(lista),
+        Err(e)    => Err(ReturnCode { codigo: -25, afectado: 0, mensaje: e.to_string() }),
     }
 }
 
@@ -93,16 +96,19 @@ pub async fn crea_partidas_proyecto(
 //   SELECT pry_Tipo FROM cpa_Proyectos WHERE pry_Id = $1
 // ─────────────────────────────────────────────
 pub async fn obtiene_tipo_proyecto(pool: &PgPool, proyecto: i32) -> Result<i32, ReturnCode> {
-    let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_ProyectoTipo($1)"
+    // El SP es RETURNS TABLE(codigo, mensaje, afectado): se leen columnas, no
+    // un escalar. codigo=40 → encontrado; `afectado` trae el tipo (puede ser 0,
+    // p.ej. "Residencial", que es un tipo válido — NO rechazar tipo=0).
+    let result = sqlx::query_as::<_, (i32, String, i32)>(
+        "SELECT codigo, mensaje, afectado FROM arqeth.sp_cpa_ProyectoTipo($1)"
     )
     .bind(proyecto)
     .fetch_optional(pool)
     .await;
 
     match result {
-        Ok(Some(tipo)) if tipo > 0 => Ok(tipo),
-        Ok(_)  => Err(ReturnCode { codigo: -41, afectado: 0, mensaje: "Error en Tipo".to_string() }),
+        Ok(Some((40, _, tipo))) => Ok(tipo),
+        Ok(_)  => Err(ReturnCode { codigo: -41, afectado: 0, mensaje: "Proyecto no encontrado".to_string() }),
         Err(e) => Err(ReturnCode { codigo: -45, afectado: 0, mensaje: e.to_string() }),
     }
 }

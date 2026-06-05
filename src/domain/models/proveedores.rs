@@ -7,7 +7,11 @@
 // Ver PATRON_NOMBRES.txt en la raíz del proyecto.
 
 use utoipa::ToSchema;
+use uuid::Uuid;
 
+// tenant_id semántica:
+//   None       → plantilla GLOBAL (no se puede editar/borrar desde la app)
+//   Some(uuid) → proveedor PRIVADO del tenant
 #[derive(Debug, Clone, ToSchema, sqlx::FromRow)]
 pub struct Proveedores {
     pub id: Option<i32>,
@@ -24,4 +28,5 @@ pub struct Proveedores {
     pub comentarios: String,
     pub activo: bool,
     pub rfc: String,
+    pub tenant_id: Option<Uuid>,     // None = global; Some = privado del tenant
 }

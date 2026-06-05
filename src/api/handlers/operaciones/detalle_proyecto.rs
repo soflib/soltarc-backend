@@ -67,6 +67,7 @@ pub struct DetalleProyectosInput {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ActualizaFechasInput {
+    pub proyecto:      i32,
     pub nodo:          String,
     /// Formato: "YYYY-MM-DD"
     pub fecha_ini:     String,
@@ -90,6 +91,7 @@ pub struct FiltroProyecto {
 
 #[derive(Debug, Deserialize)]
 pub struct FiltroNodo {
+    pub proyecto: Option<i32>,
     pub nodo: Option<String>,
 }
 
@@ -406,9 +408,15 @@ pub async fn nodos_desc(
             return (StatusCode::BAD_REQUEST, Json(json!({ "codigo": -1, "mensaje": "El parámetro nodo es requerido" })));
         }
     };
-    debug!("GET /operaciones/detalle-proyecto/nodos-desc?nodo={}", nodo);
+    let proyecto = match filtro.proyecto {
+        Some(p) => p,
+        None => {
+            return (StatusCode::BAD_REQUEST, Json(json!({ "codigo": -1, "mensaje": "El parámetro proyecto es requerido" })));
+        }
+    };
+    debug!("GET /operaciones/detalle-proyecto/nodos-desc?proyecto={}&nodo={}", proyecto, nodo);
 
-    match svc::nodos_desc(&state.postgres, &nodo).await {
+    match svc::nodos_desc(&state.postgres, proyecto, &nodo).await {
         Ok(lista) => {
             info!("GET /operaciones/detalle-proyecto/nodos-desc ← 200 {} nodos", lista.len());
             (StatusCode::OK, Json(json!(lista.iter().map(|d| det_json(d)).collect::<Vec<_>>())))
@@ -460,7 +468,7 @@ pub async fn actualiza_fechas(
         }
     };
 
-    let ret = svc::actualiza_fechas(&state.postgres, &body.nodo, fi, ff, body.estado, ft).await;
+    let ret = svc::actualiza_fechas(&state.postgres, body.proyecto, &body.nodo, fi, ff, body.estado, ft).await;
 
     if ret.afectado > 0 {
         info!("PUT /operaciones/detalle-proyecto/fechas ← 200 OK afectado={}", ret.afectado);

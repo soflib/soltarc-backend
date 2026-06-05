@@ -1,4 +1,4 @@
-// Programa...: handler::catalogs::cat_general
+// Programa...: handler::catalogs::cat_general (multi-tenant)
 // Descripción: Endpoints HTTP para el catálogo general
 // Origen.....: CatGeneral.aspx.cs
 //
@@ -10,16 +10,21 @@
 //   GET    /general/catalogs              → obtiene_todo
 //   GET    /general/catalogs/tipo/{tipo}  → obtiene_por_tipo
 //   GET    /general/catalog-types         → obtiene_tipos
+//
+// tenant_id: se extrae de AuthUser (poblado por require_auth desde el JWT)
+// y se pasa a cada llamada del service. Si viene vacío → 400.
 
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
+    Extension,
     Json,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tracing::{debug, error, info};
 
+use crate::api::middleware::roles::AuthUser;
 use crate::infrastructure::db::app_state::AppState;
 use crate::services::catalog_g::general_cat as svc;
 use crate::domain::models::catalog_g::{
@@ -50,11 +55,17 @@ pub struct CatalogLookupQuery {
 )]
 pub async fn alta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<CatalogGInput>,
 ) -> (StatusCode, Json<Value>) {
     info!("POST /general/catalogs → tipo={:?} nombre='{}'", body.tipo, body.nombre);
 
-    let ret = svc::alta(&state.postgres, &body).await;
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    let ret = svc::alta(&state.postgres, &body, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("POST /general/catalogs ← 201 afectado={}", ret.afectado);
@@ -80,11 +91,17 @@ pub async fn alta(
 )]
 pub async fn baja(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     info!("DELETE /general/catalogs/{}", id);
 
-    let ret = svc::baja(&state.postgres, id).await;
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    let ret = svc::baja(&state.postgres, id, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("DELETE /general/catalogs/{} ← 200 OK", id);
@@ -110,6 +127,7 @@ pub async fn baja(
 )]
 pub async fn cambios(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<CatalogGInput>,
 ) -> (StatusCode, Json<Value>) {
     info!("PUT /general/catalogs → id={:?} nombre='{}'", body.id, body.nombre);
@@ -122,7 +140,12 @@ pub async fn cambios(
         );
     };
 
-    let ret = svc::cambios(&state.postgres, &body).await;
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    let ret = svc::cambios(&state.postgres, &body, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("PUT /general/catalogs ← 200 OK afectado={}", ret.afectado);
@@ -149,11 +172,17 @@ pub async fn cambios(
 )]
 pub async fn consulta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /general/catalogs/{}", id);
 
-    match svc::consulta(&state.postgres, id).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::consulta(&state.postgres, id, tenant_id).await {
         Ok(Some(cat)) => {
             info!("GET /general/catalogs/{} ← 200 nombre={:?}", id, cat.nombre);
             (
@@ -164,6 +193,7 @@ pub async fn consulta(
                     "nombre":      cat.nombre,
                     "activo":      cat.activo,
                     "comentarios": cat.comentarios,
+                    "tenant_id":   cat.tenant_id.map(|u| u.to_string()),
                 })),
             )
         }
@@ -199,10 +229,16 @@ pub async fn consulta(
 )]
 pub async fn obtiene_todo(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /general/catalogs");
 
-    match svc::obtiene_todo(&state.postgres).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::obtiene_todo(&state.postgres, tenant_id).await {
         Ok(lista) => {
             info!("GET /general/catalogs ← 200 {} registros", lista.len());
             (
@@ -215,6 +251,7 @@ pub async fn obtiene_todo(
                         "nombre":      c.nombre,
                         "activo":      c.activo,
                         "comentarios": c.comentarios,
+                        "tenant_id":   c.tenant_id.map(|u| u.to_string()),
                     }))
                     .collect::<Vec<_>>())),
             )
@@ -242,7 +279,7 @@ pub async fn obtiene_todo(
 #[utoipa::path(
     get,
     path = "/general/catalogs/tipo/{tipo}",
-    params(("tipo" = i32, Path, description = "Código de tipo: 0=Sistema 1=Estado proy 2=Tipo proy 3=Pers.moral 4=Tipo prov 5=Bancos 6=Tipo Tarea 7=Estado PPTO 8=Estado Partidas")),
+    params(("tipo" = i32, Path, description = "Código de tipo: 1=Estado proy 2=Tipo proy 3=Pers.moral 4=Tipo prov 5=Bancos 6=Tipo Tarea 7=Estado PPTO 8=Estado Partidas")),
     responses(
         (status = 200, description = "Catálogos del tipo indicado", body = Vec<CatalogGOutput>),
         (status = 404, description = "Sin registros para ese tipo", body = Value),
@@ -252,11 +289,17 @@ pub async fn obtiene_todo(
 )]
 pub async fn obtiene_por_tipo(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(tipo): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /general/catalogs/tipo/{}", tipo);
 
-    match svc::obtiene_por_tipo(&state.postgres, tipo).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::obtiene_por_tipo(&state.postgres, tipo, tenant_id).await {
         Ok(lista) => {
             info!("GET /general/catalogs/tipo/{} ← 200 {} registros", tipo, lista.len());
             (StatusCode::OK, Json(json!(lista.iter().map(|c| json!({
@@ -265,6 +308,7 @@ pub async fn obtiene_por_tipo(
                 "nombre":      c.nombre,
                 "activo":      c.activo,
                 "comentarios": c.comentarios,
+                "tenant_id":   c.tenant_id.map(|u| u.to_string()),
             })).collect::<Vec<_>>())))
         }
         Err(rc) if rc.codigo > -35 => {
@@ -293,10 +337,16 @@ pub async fn obtiene_por_tipo(
 )]
 pub async fn obtiene_tipos(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /general/catalog-types");
 
-    match svc::obtiene_tipos(&state.postgres).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::obtiene_tipos(&state.postgres, tenant_id).await {
         Ok(lista) => {
             info!("GET /general/catalog-types ← 200 {} tipos", lista.len());
             (StatusCode::OK, Json(json!(lista.iter().map(|c| json!({
@@ -305,6 +355,7 @@ pub async fn obtiene_tipos(
                 "nombre":      c.nombre,
                 "activo":      c.activo,
                 "comentarios": c.comentarios,
+                "tenant_id":   c.tenant_id.map(|u| u.to_string()),
             })).collect::<Vec<_>>())))
         }
         Err(rc) if rc.codigo > -55 => {
@@ -338,13 +389,19 @@ pub async fn obtiene_tipos(
 )]
 pub async fn lookup(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<CatalogLookupQuery>,
 ) -> (StatusCode, Json<Value>) {
     let qs    = q.q.unwrap_or_default();
     let limit = q.limit.unwrap_or(20).clamp(1, 100);
     debug!("GET /general/catalogs/lookup tipo={} q='{}' limit={}", q.tipo, qs, limit);
 
-    match svc::lookup(&state.postgres, q.tipo, &qs, limit).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::lookup(&state.postgres, q.tipo, &qs, limit, tenant_id).await {
         Ok(items) => {
             info!("GET /general/catalogs/lookup ← 200 {} items", items.len());
             let payload: Vec<LookupItem> = items;

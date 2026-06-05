@@ -6,7 +6,7 @@
 //   crate::dal::xref_detalle_proy_finan::*
 
 use crate::dal::xref_detalle_proy_finan as dal;
-use crate::domain::models::xref_detalle_proy_finan::XrefDetalleProyFinan;
+use crate::domain::models::xref_detalle_proy_finan::{XrefDetalleProyFinan, XrefSaldo};
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
 
@@ -32,4 +32,8 @@ pub async fn egresos_a_partidas(pool: &PgPool, partida: i32) -> Result<Vec<XrefD
 
 pub async fn egresos_no_asignados(pool: &PgPool, proyecto: i32) -> Result<Vec<XrefDetalleProyFinan>, ReturnCode> {
     dal::egresos_no_asignados(pool, proyecto).await
+}
+
+pub async fn saldo(pool: &PgPool, transaccion: i32) -> Result<XrefSaldo, ReturnCode> {
+    dal::saldo(pool, transaccion).await
 }

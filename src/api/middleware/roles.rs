@@ -5,7 +5,8 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use serde_json::json;
+use serde_json::{json, Value};
+use uuid::Uuid;
 
 /// Populated by `require_auth` and stored in request extensions.
 /// All role middleware reads from here — no extra gRPC call needed.
@@ -25,6 +26,21 @@ impl AuthUser {
     /// Returns true if the user is Admin OR has the given role.
     fn has_role(&self, role: &str) -> bool {
         self.is_admin() || self.role.eq_ignore_ascii_case(role)
+    }
+
+    /// Parsea el tenant_id (String) del JWT a Uuid.
+    /// Devuelve una respuesta 400 lista si está vacío o mal formado.
+    pub fn tenant_uuid(&self) -> Result<Uuid, (StatusCode, Json<Value>)> {
+        if self.tenant_id.is_empty() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "codigo": -1, "mensaje": "El usuario no tiene tenant asignado" })),
+            ));
+        }
+        Uuid::parse_str(&self.tenant_id).map_err(|_| (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "codigo": -2, "mensaje": "tenant_id inválido en el token" })),
+        ))
     }
 }
 

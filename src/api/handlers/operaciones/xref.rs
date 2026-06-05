@@ -303,3 +303,45 @@ pub async fn egresos_no_asignados(
         }
     }
 }
+
+// ─────────────────────────────────────────────
+// SALDO DE EGRESO — GET /operaciones/xref/saldo/{transaccion}
+// Devuelve { monto_egreso, aplicado, disponible } para mostrar al usuario en
+// el modal cuánto monto puede aplicar antes de exceder el egreso.
+// ─────────────────────────────────────────────
+#[utoipa::path(
+    get,
+    path = "/operaciones/xref/saldo/{transaccion}",
+    params(("transaccion" = i32, Path, description = "Id del egreso/transacción")),
+    responses(
+        (status = 200, description = "Saldo del egreso",         body = Value),
+        (status = 404, description = "Egreso no encontrado",     body = Value),
+        (status = 500, description = "Error de base de datos",   body = Value),
+    ),
+    tag = "XRef"
+)]
+pub async fn saldo(
+    State(state): State<AppState>,
+    Path(transaccion): Path<i32>,
+) -> (StatusCode, Json<Value>) {
+    debug!("GET /operaciones/xref/saldo/{}", transaccion);
+
+    match svc::saldo(&state.postgres, transaccion).await {
+        Ok(s) => {
+            info!("GET /operaciones/xref/saldo/{} ← 200 disp={}", transaccion, s.disponible);
+            (StatusCode::OK, Json(json!({
+                "monto_egreso": s.monto_egreso.to_string(),
+                "aplicado":     s.aplicado.to_string(),
+                "disponible":   s.disponible.to_string(),
+            })))
+        }
+        Err(ret) if ret.codigo < -42 => {
+            error!("GET /operaciones/xref/saldo/{} ← 500 codigo={}", transaccion, ret.codigo);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "codigo": ret.codigo, "mensaje": ret.mensaje })))
+        }
+        Err(ret) => {
+            info!("GET /operaciones/xref/saldo/{} ← 404", transaccion);
+            (StatusCode::NOT_FOUND, Json(json!({ "codigo": ret.codigo, "mensaje": ret.mensaje })))
+        }
+    }
+}

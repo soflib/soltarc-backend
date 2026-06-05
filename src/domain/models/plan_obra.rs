@@ -13,4 +13,12 @@ pub struct PlanObra {
     pub estado: i32,
     pub comentarios: String,
     pub fecha_termina: NaiveDateTime,
+    // Ruta jerárquica (ej. "/5/1/1.1/"). Permite resolver descendientes.
+    // default: la SP de avance no la devuelve y una DB aún sin migrar tampoco.
+    #[sqlx(default)]
+    pub nodo: String,
+    // Nombre de la partida. Solo lo trae la consulta de descendientes; las
+    // demás (qry/avance) devuelven default "" porque ya muestran comentarios.
+    #[sqlx(default)]
+    pub descripcion: String,
 }

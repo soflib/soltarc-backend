@@ -13,7 +13,7 @@
 // Nota: EgresosNoAsignados() ligaba a un GridView en C# y no devolvía nada (void).
 //       Se migra a Result<Vec<XrefDetalleProyFinan>, ReturnCode> para consistencia.
 
-use crate::domain::models::xref_detalle_proy_finan::XrefDetalleProyFinan;
+use crate::domain::models::xref_detalle_proy_finan::{XrefDetalleProyFinan, XrefSaldo};
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
 
@@ -115,6 +115,26 @@ pub async fn egresos_a_partidas(pool: &PgPool, partida: i32) -> Result<Vec<XrefD
         Ok(lista) if !lista.is_empty() => Ok(lista),
         Ok(_)  => Err(ReturnCode { codigo: -51, afectado: 0, mensaje: "No hay partidas".to_string() }),
         Err(e) => Err(ReturnCode { codigo: -55, afectado: 0, mensaje: e.to_string() }),
+    }
+}
+
+// ─────────────────────────────────────────────
+// SALDO DE EGRESO — sp_cpa_xref_saldo
+// Devuelve (monto_egreso, aplicado, disponible) para mostrar al usuario
+// cuánto puede asignar antes de exceder el egreso.
+// ─────────────────────────────────────────────
+pub async fn saldo(pool: &PgPool, transaccion: i32) -> Result<XrefSaldo, ReturnCode> {
+    let result = sqlx::query_as::<_, XrefSaldo>(
+        "SELECT * FROM arqeth.sp_cpa_xref_saldo($1)"
+    )
+    .bind(transaccion)
+    .fetch_optional(pool)
+    .await;
+
+    match result {
+        Ok(Some(s)) => Ok(s),
+        Ok(None)    => Err(ReturnCode { codigo: -41, afectado: 0, mensaje: "Egreso no encontrado".to_string() }),
+        Err(e)      => Err(ReturnCode { codigo: -45, afectado: 0, mensaje: e.to_string() }),
     }
 }
 

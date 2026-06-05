@@ -585,12 +585,13 @@ pub fn build_router(postgres: PgPool, auth_grpc: AuthGrpcClient) -> Router {
         .route_layer(middleware::from_fn(require_arquitecto));
 
     let han_xref = Router::new()
-        .route("/operaciones/xref/no-asignados", get(han_xref::egresos_no_asignados))
-        .route("/operaciones/xref",              post(han_xref::alta))
-        .route("/operaciones/xref",              put(han_xref::cambio))
-        .route("/operaciones/xref/{id}",         get(han_xref::consulta))
-        .route("/operaciones/xref/{id}",         delete(han_xref::baja))
-        .route("/operaciones/xref/{id}/egresos", get(han_xref::egresos_a_partidas))
+        .route("/operaciones/xref/no-asignados",       get(han_xref::egresos_no_asignados))
+        .route("/operaciones/xref/saldo/{transaccion}", get(han_xref::saldo))
+        .route("/operaciones/xref",                    post(han_xref::alta))
+        .route("/operaciones/xref",                    put(han_xref::cambio))
+        .route("/operaciones/xref/{id}",               get(han_xref::consulta))
+        .route("/operaciones/xref/{id}",               delete(han_xref::baja))
+        .route("/operaciones/xref/{id}/egresos",       get(han_xref::egresos_a_partidas))
         .route_layer(middleware::from_fn(require_arquitecto));
 
     let han_plan_obra_routes = Router::new()

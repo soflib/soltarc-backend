@@ -18,18 +18,20 @@
 use crate::domain::models::tipos_costo::TiposCosto;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 // ─────────────────────────────────────────────
 // ALTA — ppto_sp_TiposCosto_Add
 // ─────────────────────────────────────────────
-pub async fn alta(pool: &PgPool, tpo: &TiposCosto) -> ReturnCode {
+pub async fn alta(pool: &PgPool, tpo: &TiposCosto, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_TiposCosto_Add($1, $2, $3, $4)"
+        "SELECT arqeth.ppto_sp_TiposCosto_Add($1, $2, $3, $4, $5)"
     )
     .bind(&tpo.nombre)
     .bind(&tpo.descripcion)
     .bind(tpo.activo)
     .bind(&tpo.imagen)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -43,11 +45,12 @@ pub async fn alta(pool: &PgPool, tpo: &TiposCosto) -> ReturnCode {
 // ─────────────────────────────────────────────
 // BAJA — ppto_sp_TiposCosto_DEL
 // ─────────────────────────────────────────────
-pub async fn baja(pool: &PgPool, id: i32) -> ReturnCode {
+pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_TiposCosto_DEL($1)"
+        "SELECT arqeth.ppto_sp_TiposCosto_DEL($1, $2)"
     )
     .bind(id)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -62,15 +65,16 @@ pub async fn baja(pool: &PgPool, id: i32) -> ReturnCode {
 // CAMBIO — ppto_sp_TiposCosto_UPD
 // Nota: C# original usaba codigo 10 en Ok — corregido a 30
 // ─────────────────────────────────────────────
-pub async fn cambio(pool: &PgPool, tpo: &TiposCosto) -> ReturnCode {
+pub async fn cambio(pool: &PgPool, tpo: &TiposCosto, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_TiposCosto_UPD($1, $2, $3, $4, $5)"
+        "SELECT arqeth.ppto_sp_TiposCosto_UPD($1, $2, $3, $4, $5, $6)"
     )
     .bind(tpo.id.unwrap_or(0))  // id es Option<i32> — 0 nunca debería llegar aquí
     .bind(&tpo.nombre)
     .bind(&tpo.descripcion)
     .bind(tpo.activo)
     .bind(&tpo.imagen)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -84,11 +88,12 @@ pub async fn cambio(pool: &PgPool, tpo: &TiposCosto) -> ReturnCode {
 // ─────────────────────────────────────────────
 // CONSULTA — ppto_sp_TiposCosto_QRY
 // ─────────────────────────────────────────────
-pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<TiposCosto>, ReturnCode> {
+pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<TiposCosto>, ReturnCode> {
     let result = sqlx::query_as::<_, TiposCosto>(
-        "SELECT * FROM arqeth.ppto_sp_TiposCosto_QRY($1)"
+        "SELECT * FROM arqeth.ppto_sp_TiposCosto_QRY($1, $2)"
     )
     .bind(id)
+    .bind(tenant_id)
     .fetch_optional(pool)
     .await;
 
@@ -101,11 +106,12 @@ pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<TiposCosto>, Retu
 // ─────────────────────────────────────────────
 // CARGA TIPOS — ppto_sp_TiposCosto_LSTACT
 // ─────────────────────────────────────────────
-pub async fn carga_tipos(pool: &PgPool, activos: bool) -> Result<Vec<TiposCosto>, ReturnCode> {
+pub async fn carga_tipos(pool: &PgPool, activos: bool, tenant_id: Uuid) -> Result<Vec<TiposCosto>, ReturnCode> {
     let result = sqlx::query_as::<_, TiposCosto>(
-        "SELECT * FROM arqeth.ppto_sp_TiposCosto_LSTACT($1)"
+        "SELECT * FROM arqeth.ppto_sp_TiposCosto_LSTACT($1, $2)"
     )
     .bind(activos)
+    .bind(tenant_id)
     .fetch_all(pool)
     .await;
 

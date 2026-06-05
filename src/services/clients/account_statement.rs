@@ -6,6 +6,7 @@ use crate::dal::{clientes, reportes};
 use crate::domain::models::reportes::EstadoCuenta;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 pub async fn estado_de_cuenta(
     pool: &PgPool,
@@ -14,6 +15,6 @@ pub async fn estado_de_cuenta(
     reportes::estado_de_cuenta(pool, cliente).await
 }
 
-pub async fn nombre_cliente(pool: &PgPool, cliente: i32) -> ReturnCode {
-    clientes::nombre_cliente(pool, cliente).await
+pub async fn nombre_cliente(pool: &PgPool, cliente: i32, tenant_id: Uuid) -> ReturnCode {
+    clientes::nombre_cliente(pool, cliente, tenant_id).await
 }

@@ -8,6 +8,7 @@
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
+    Extension,
     Json,
 };
 use serde::Deserialize;
@@ -15,6 +16,7 @@ use serde_json::{json, Value};
 use utoipa::ToSchema;
 use tracing::{debug, error, info};
 
+use crate::api::middleware::roles::AuthUser;
 use crate::domain::models::lookup::LookupItem;
 use crate::domain::models::presupuesto::Presupuesto;
 use crate::infrastructure::db::app_state::AppState;
@@ -99,12 +101,18 @@ fn ppto_json(p: &Presupuesto) -> Value {
 )]
 pub async fn alta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<PresupuestoInput>,
 ) -> (StatusCode, Json<Value>) {
     debug!(nombre = %body.nombre, "POST /ppto/presupuestos");
 
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
     let ppto = input_to_model(body);
-    let ret = svc::alta(&state.postgres, &ppto).await;
+    let ret = svc::alta(&state.postgres, &ppto, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("POST /ppto/presupuestos ← 201 id={}", ret.afectado);
@@ -129,11 +137,17 @@ pub async fn alta(
 )]
 pub async fn baja(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     info!("DELETE /ppto/presupuestos/{}", id);
 
-    let ret = svc::baja(&state.postgres, id).await;
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    let ret = svc::baja(&state.postgres, id, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("DELETE /ppto/presupuestos/{} ← 200 OK", id);
@@ -158,6 +172,7 @@ pub async fn baja(
 )]
 pub async fn cambio(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<PresupuestoInput>,
 ) -> (StatusCode, Json<Value>) {
     debug!(id = ?body.id, "PUT /ppto/presupuestos");
@@ -166,8 +181,13 @@ pub async fn cambio(
         return (StatusCode::BAD_REQUEST, Json(json!({ "codigo": -1, "mensaje": "El campo id es requerido para cambio" })));
     };
 
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
     let ppto = input_to_model(body);
-    let ret = svc::cambio(&state.postgres, &ppto).await;
+    let ret = svc::cambio(&state.postgres, &ppto, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("PUT /ppto/presupuestos ← 200 OK afectado={}", ret.afectado);
@@ -193,11 +213,17 @@ pub async fn cambio(
 )]
 pub async fn consulta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /ppto/presupuestos/{}", id);
 
-    match svc::consulta(&state.postgres, id).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::consulta(&state.postgres, id, tenant_id).await {
         Ok(Some(p)) => {
             info!("GET /ppto/presupuestos/{} ← 200", id);
             (StatusCode::OK, Json(ppto_json(&p)))
@@ -234,16 +260,26 @@ pub async fn consulta(
 )]
 pub async fn carga_pptos(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<PresupuestosQuery>,
 ) -> (StatusCode, Json<Value>) {
-    let (Some(gpo_neg), Some(gpo_user_id), Some(usr_nivel)) = (q.gpo_neg, q.gpo_user_id, q.usr_nivel) else {
-        return (StatusCode::BAD_REQUEST, Json(json!({ "codigo": -1, "mensaje": "Se requieren gpo_neg, gpo_user_id y usr_nivel" })));
-    };
-    let activos = q.activos.unwrap_or(true);
+    // El aislamiento por tenant ya lo aplica ppto_sp_presupuesto_lstact. Los
+    // parámetros de grupo son opcionales: por defecto usr_nivel=1 → el usuario
+    // ve TODOS los presupuestos de su tenant (mismo patrón que proyectos/clientes,
+    // que sólo reciben `activos`). El frontend manda `?proyecto=` y se ignora.
+    let gpo_neg     = q.gpo_neg.unwrap_or(0);
+    let gpo_user_id = q.gpo_user_id.unwrap_or(0);
+    let usr_nivel   = q.usr_nivel.unwrap_or(1);
+    let activos     = q.activos.unwrap_or(true);
 
     debug!(gpo_neg, gpo_user_id, usr_nivel, activos, "GET /ppto/presupuestos");
 
-    match svc::carga_pptos(&state.postgres, gpo_neg, gpo_user_id, usr_nivel, activos).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::carga_pptos(&state.postgres, gpo_neg, gpo_user_id, usr_nivel, activos, tenant_id).await {
         Ok(lista) => {
             info!("GET /ppto/presupuestos ← 200 {} registros", lista.len());
             let items: Vec<Value> = lista.iter().map(ppto_json).collect();
@@ -281,13 +317,19 @@ pub async fn carga_pptos(
 )]
 pub async fn lookup(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<PptoLookupQuery>,
 ) -> (StatusCode, Json<Value>) {
     let qs    = q.q.unwrap_or_default();
     let limit = q.limit.unwrap_or(20).clamp(1, 100);
     debug!("GET /ppto/presupuestos/lookup q='{}' cliente={:?} limit={}", qs, q.cliente, limit);
 
-    match svc::lookup(&state.postgres, &qs, q.cliente, limit).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::lookup(&state.postgres, &qs, q.cliente, limit, tenant_id).await {
         Ok(items) => {
             info!("GET /ppto/presupuestos/lookup ← 200 {} items", items.len());
             let payload: Vec<LookupItem> = items;

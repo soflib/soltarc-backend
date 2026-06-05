@@ -14,6 +14,7 @@
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
+    Extension,
     Json,
 };
 use serde::Deserialize;
@@ -21,6 +22,7 @@ use serde_json::{json, Value};
 use utoipa::ToSchema;
 use tracing::{debug, error, info};
 
+use crate::api::middleware::roles::AuthUser;
 use crate::domain::models::lookup::LookupItem;
 use crate::domain::models::proveedores::Proveedores;
 use crate::infrastructure::db::app_state::AppState;
@@ -68,9 +70,15 @@ pub struct FiltroActivos {
 )]
 pub async fn alta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<ProveedorInput>,
 ) -> (StatusCode, Json<Value>) {
     info!("POST /catalog/providers → nombre='{}' tipo={} giro={}", body.nombre, body.tipo, body.giro);
+
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
 
     let prov = Proveedores {
         id:           body.id,
@@ -87,8 +95,9 @@ pub async fn alta(
         comentarios:  body.comentarios,
         activo:       body.activo,
         rfc:          body.rfc,
+        tenant_id:    None, // ignorado por sp_*_add/upd; lo fija el SP a partir del p_tenant_id
     };
-    let ret = svc::alta(&state.postgres, &prov).await;
+    let ret = svc::alta(&state.postgres, &prov, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("POST /catalog/providers ← 201 afectado={}", ret.afectado);
@@ -114,11 +123,17 @@ pub async fn alta(
 )]
 pub async fn baja(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     info!("DELETE /catalog/providers/{}", id);
 
-    let ret = svc::baja(&state.postgres, id).await;
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    let ret = svc::baja(&state.postgres, id, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("DELETE /catalog/providers/{} ← 200 OK", id);
@@ -144,6 +159,7 @@ pub async fn baja(
 )]
 pub async fn cambio(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<ProveedorInput>,
 ) -> (StatusCode, Json<Value>) {
     info!("PUT /catalog/providers → id={:?} nombre='{}'", body.id, body.nombre);
@@ -155,6 +171,12 @@ pub async fn cambio(
             Json(json!({ "codigo": -1, "mensaje": "El campo id es requerido para cambio" })),
         );
     }
+
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
     let prov = Proveedores {
         id:           body.id,
         nombre:       body.nombre,
@@ -170,8 +192,9 @@ pub async fn cambio(
         comentarios:  body.comentarios,
         activo:       body.activo,
         rfc:          body.rfc,
+        tenant_id:    None, // ignorado por sp_*_add/upd; lo fija el SP a partir del p_tenant_id
     };
-    let ret = svc::cambio(&state.postgres, &prov).await;
+    let ret = svc::cambio(&state.postgres, &prov, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("PUT /catalog/providers ← 200 OK afectado={}", ret.afectado);
@@ -198,11 +221,17 @@ pub async fn cambio(
 )]
 pub async fn consulta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /catalog/providers/{}", id);
 
-    match svc::consulta(&state.postgres, id).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::consulta(&state.postgres, id, tenant_id).await {
         Ok(Some(p)) => {
             info!("GET /catalog/providers/{} ← 200 nombre='{}'", id, p.nombre);
             (StatusCode::OK, Json(json!({
@@ -220,6 +249,7 @@ pub async fn consulta(
                 "comentarios":  p.comentarios,
                 "activo":       p.activo,
                 "rfc":          p.rfc,
+                "tenant_id":    p.tenant_id.map(|u| u.to_string()),
             })))
         }
         Ok(None) => {
@@ -249,12 +279,18 @@ pub async fn consulta(
 )]
 pub async fn carga_proveedores(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(filtro): Query<FiltroActivos>,
 ) -> (StatusCode, Json<Value>) {
     let activos = filtro.activos.unwrap_or(true);
     debug!("GET /catalog/providers?activos={}", activos);
 
-    match svc::carga_proveedores(&state.postgres, activos).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::carga_proveedores(&state.postgres, activos, tenant_id).await {
         Ok(lista) => {
             info!("GET /catalog/providers ← 200 {} registros", lista.len());
             (StatusCode::OK, Json(json!(lista.iter().map(|p| json!({
@@ -268,6 +304,7 @@ pub async fn carga_proveedores(
                 "giro":        p.giro,
                 "giro_nombre": p.giro_nombre,
                 "activo":      p.activo,
+                "tenant_id":   p.tenant_id.map(|u| u.to_string()),
             })).collect::<Vec<_>>())))
         }
         Err(ret) if ret.codigo < -50 => {
@@ -296,10 +333,16 @@ pub async fn carga_proveedores(
 )]
 pub async fn obtiene_tipos(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /catalog/providers/tipos");
 
-    match svc::obtiene_tipos(&state.postgres).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::obtiene_tipos(&state.postgres, tenant_id).await {
         Ok(lista) => {
             info!("GET /catalog/providers/tipos ← 200 {} tipos", lista.len());
             (StatusCode::OK, Json(json!(lista.iter().map(|t| json!({
@@ -333,10 +376,16 @@ pub async fn obtiene_tipos(
 )]
 pub async fn obtiene_giros(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /catalog/providers/giros");
 
-    match svc::obtiene_giros(&state.postgres).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::obtiene_giros(&state.postgres, tenant_id).await {
         Ok(lista) => {
             info!("GET /catalog/providers/giros ← 200 {} giros", lista.len());
             (StatusCode::OK, Json(json!(lista.iter().map(|t| json!({
@@ -374,13 +423,19 @@ pub async fn obtiene_giros(
 )]
 pub async fn lookup(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<LookupQuery>,
 ) -> (StatusCode, Json<Value>) {
     let qs    = q.q.unwrap_or_default();
     let limit = q.limit.unwrap_or(20).clamp(1, 100);
     debug!("GET /catalog/providers/lookup q='{}' limit={}", qs, limit);
 
-    match svc::lookup(&state.postgres, &qs, limit).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::lookup(&state.postgres, &qs, limit, tenant_id).await {
         Ok(items) => {
             info!("GET /catalog/providers/lookup ← 200 {} items", items.len());
             let payload: Vec<LookupItem> = items;

@@ -8,6 +8,7 @@
 use axum::{
     extract::{Path, State},
     http::StatusCode,
+    Extension,
     Json,
 };
 use serde_json::{json, Value};
@@ -29,11 +30,17 @@ use crate::services::clients::work_progress as svc;
 )]
 pub async fn work_progress(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<crate::api::middleware::roles::AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /clients/portal/projects/{}/work-progress", id);
 
-    let proyecto = match svc::consulta_proyecto(&state.postgres, id).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    let proyecto = match svc::consulta_proyecto(&state.postgres, id, tenant_id).await {
         Ok(Some(p)) => p,
         Ok(None) => {
             info!("GET /clients/portal/projects/{}/work-progress ← 404", id);
@@ -45,7 +52,7 @@ pub async fn work_progress(
         }
     };
 
-    let nombre_cliente = svc::nombre_cliente(&state.postgres, proyecto.cliente).await;
+    let nombre_cliente = svc::nombre_cliente(&state.postgres, proyecto.cliente, tenant_id).await;
 
     let (ingresos, egresos) = tokio::join!(
         svc::ingresos(&state.postgres, id),

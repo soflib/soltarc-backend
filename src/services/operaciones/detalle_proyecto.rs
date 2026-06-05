@@ -35,19 +35,20 @@ pub async fn carga_tareas(pool: &PgPool, proyecto: i32) -> Result<Vec<DetallePro
     dal::carga_tareas(pool, proyecto).await
 }
 
-pub async fn nodos_desc(pool: &PgPool, nodo_raiz: &str) -> Result<Vec<DetalleProyectos>, ReturnCode> {
-    dal::nodos_desc(pool, nodo_raiz).await
+pub async fn nodos_desc(pool: &PgPool, proyecto: i32, nodo_raiz: &str) -> Result<Vec<DetalleProyectos>, ReturnCode> {
+    dal::nodos_desc(pool, proyecto, nodo_raiz).await
 }
 
 pub async fn actualiza_fechas(
     pool: &PgPool,
+    proyecto: i32,
     nodo: &str,
     fecha_ini: Date,
     fecha_fin: Date,
     estado: i32,
     fecha_termino: Date,
 ) -> ReturnCode {
-    dal::actualiza_fechas(pool, nodo, fecha_ini, fecha_fin, estado, fecha_termino).await
+    dal::actualiza_fechas(pool, proyecto, nodo, fecha_ini, fecha_fin, estado, fecha_termino).await
 }
 
 pub async fn copia_contenido_partidas(pool: &PgPool, origen: i32, destino: i32) -> ReturnCode {

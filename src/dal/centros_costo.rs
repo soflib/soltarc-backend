@@ -1,30 +1,37 @@
 // Programa...: centros_costo
-// Descripción: Operaciones de la tabla cpa_CentrosCosto
+// Descripción: Operaciones de la tabla cpa_CentrosCosto (multi-tenant)
 // Origen.....: oCentrosCosto.cs
 //
 // Stored Procedures que usa:
-//   sp_cpa_CentrosCostoAdd      → alta
-//   sp_cpa_CentrosCostoDel      → baja
-//   sp_cpa_CentrosCostoUpd      → cambios
-//   sp_cpa_CentrosCostoQry      → consulta por id
-//   sp_cpa_CentrosCostosLstAll  → lista todos
+//   sp_cpa_CentrosCostoAdd      → alta              (..., tenant_id)
+//   sp_cpa_CentrosCostoDel      → baja              (id, tenant_id)
+//   sp_cpa_CentrosCostoUpd      → cambios           (id, ..., tenant_id)
+//   sp_cpa_CentrosCostoQry      → consulta por id   (id, tenant_id)
+//   sp_cpa_CentrosCostosLstAll  → lista todos       (activos, tenant_id)
+//   sp_cpa_centroscosto_lookup  → autocomplete      (q, limit, tenant_id)
+//
+// Todos los SPs filtran por (tenant_id IS NULL OR tenant_id = p_tenant_id) en
+// lecturas y por igualdad estricta en del/upd (globales protegidos), igual que
+// cpa_catalogos y cpa_proveedores.
 
 use crate::domain::models::centros_costo::CentrosCosto;
 use crate::domain::models::lookup::LookupItem;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 // ─────────────────────────────────────────────
 // ALTA — sp_cpa_CentrosCostoAdd
 // ─────────────────────────────────────────────
-pub async fn alta(pool: &PgPool, cen: &CentrosCosto) -> ReturnCode {
+pub async fn alta(pool: &PgPool, cen: &CentrosCosto, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_CentrosCostoAdd($1, $2, $3, $4)"
+        "SELECT arqeth.sp_cpa_CentrosCostoAdd($1, $2, $3, $4, $5)"
     )
     .bind(&cen.nombre)
     .bind(cen.tipo)
     .bind(&cen.comentarios)
     .bind(cen.activo)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -38,11 +45,12 @@ pub async fn alta(pool: &PgPool, cen: &CentrosCosto) -> ReturnCode {
 // ─────────────────────────────────────────────
 // BAJA — sp_cpa_CentrosCostoDel
 // ─────────────────────────────────────────────
-pub async fn baja(pool: &PgPool, id: i32) -> ReturnCode {
+pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_CentrosCostoDel($1)"
+        "SELECT arqeth.sp_cpa_CentrosCostoDel($1, $2)"
     )
     .bind(id)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -56,15 +64,16 @@ pub async fn baja(pool: &PgPool, id: i32) -> ReturnCode {
 // ─────────────────────────────────────────────
 // CAMBIOS — sp_cpa_CentrosCostoUpd
 // ─────────────────────────────────────────────
-pub async fn cambios(pool: &PgPool, cen: &CentrosCosto) -> ReturnCode {
+pub async fn cambios(pool: &PgPool, cen: &CentrosCosto, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_CentrosCostoUpd($1, $2, $3, $4, $5)"
+        "SELECT arqeth.sp_cpa_CentrosCostoUpd($1, $2, $3, $4, $5, $6)"
     )
     .bind(cen.id)
     .bind(&cen.nombre)
     .bind(cen.tipo)
     .bind(&cen.comentarios)
     .bind(cen.activo)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -78,11 +87,12 @@ pub async fn cambios(pool: &PgPool, cen: &CentrosCosto) -> ReturnCode {
 // ─────────────────────────────────────────────
 // CONSULTA — sp_cpa_CentrosCostoQry
 // ─────────────────────────────────────────────
-pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<CentrosCosto>, ReturnCode> {
+pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<CentrosCosto>, ReturnCode> {
     let result = sqlx::query_as::<_, CentrosCosto>(
-        "SELECT * FROM arqeth.sp_cpa_CentrosCostoQry($1)"
+        "SELECT * FROM arqeth.sp_cpa_CentrosCostoQry($1, $2)"
     )
     .bind(id)
+    .bind(tenant_id)
     .fetch_optional(pool)
     .await;
 
@@ -95,11 +105,12 @@ pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<CentrosCosto>, Re
 // ─────────────────────────────────────────────
 // OBTIENE TODO — sp_cpa_CentrosCostosLstAll
 // ─────────────────────────────────────────────
-pub async fn obtiene_todo(pool: &PgPool, activos: bool) -> Result<Vec<CentrosCosto>, ReturnCode> {
+pub async fn obtiene_todo(pool: &PgPool, activos: bool, tenant_id: Uuid) -> Result<Vec<CentrosCosto>, ReturnCode> {
     let result = sqlx::query_as::<_, CentrosCosto>(
-        "SELECT * FROM arqeth.sp_cpa_CentrosCostosLstAll($1)"
+        "SELECT * FROM arqeth.sp_cpa_CentrosCostosLstAll($1, $2)"
     )
     .bind(activos)
+    .bind(tenant_id)
     .fetch_all(pool)
     .await;
 
@@ -111,14 +122,26 @@ pub async fn obtiene_todo(pool: &PgPool, activos: bool) -> Result<Vec<CentrosCos
 }
 
 // ─────────────────────────────────────────────
+// SEED por tenant — sp_cpa_centroscosto_seed
+// Idempotente: re-llamarlo para el mismo tenant no duplica filas.
+// ─────────────────────────────────────────────
+pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid) -> Result<i32, sqlx::Error> {
+    sqlx::query_scalar::<_, i32>("SELECT arqeth.sp_cpa_centroscosto_seed($1)")
+        .bind(tenant_id)
+        .fetch_one(pool)
+        .await
+}
+
+// ─────────────────────────────────────────────
 // LOOKUP — sp_cpa_centroscosto_lookup
 // ─────────────────────────────────────────────
-pub async fn lookup(pool: &PgPool, q: &str, limit: i32) -> Result<Vec<LookupItem>, ReturnCode> {
+pub async fn lookup(pool: &PgPool, q: &str, limit: i32, tenant_id: Uuid) -> Result<Vec<LookupItem>, ReturnCode> {
     let result = sqlx::query_as::<_, LookupItem>(
-        "SELECT id, etiqueta FROM arqeth.sp_cpa_centroscosto_lookup($1, $2)"
+        "SELECT id, etiqueta FROM arqeth.sp_cpa_centroscosto_lookup($1, $2, $3)"
     )
     .bind(q)
     .bind(limit)
+    .bind(tenant_id)
     .fetch_all(pool)
     .await;
 

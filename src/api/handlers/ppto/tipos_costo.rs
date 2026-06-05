@@ -8,6 +8,7 @@
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
+    Extension,
     Json,
 };
 use serde::Deserialize;
@@ -15,6 +16,7 @@ use serde_json::{json, Value};
 use utoipa::ToSchema;
 use tracing::{debug, error, info};
 
+use crate::api::middleware::roles::AuthUser;
 use crate::domain::models::tipos_costo::TiposCosto;
 use crate::infrastructure::db::app_state::AppState;
 use crate::services::ppto::tipos_costo as svc;
@@ -67,12 +69,15 @@ fn tipo_json(t: &TiposCosto) -> Value {
 )]
 pub async fn alta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<TiposCostoInput>,
 ) -> (StatusCode, Json<Value>) {
     debug!(nombre = %body.nombre, "POST /ppto/tipos-costo");
 
+    let tenant_id = match auth_user.tenant_uuid() { Ok(t) => t, Err(e) => return e };
+
     let tpo = input_to_model(body);
-    let ret = svc::alta(&state.postgres, &tpo).await;
+    let ret = svc::alta(&state.postgres, &tpo, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("POST /ppto/tipos-costo ← 201 id={}", ret.afectado);
@@ -97,11 +102,14 @@ pub async fn alta(
 )]
 pub async fn baja(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     info!("DELETE /ppto/tipos-costo/{}", id);
 
-    let ret = svc::baja(&state.postgres, id).await;
+    let tenant_id = match auth_user.tenant_uuid() { Ok(t) => t, Err(e) => return e };
+
+    let ret = svc::baja(&state.postgres, id, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("DELETE /ppto/tipos-costo/{} ← 200 OK", id);
@@ -126,16 +134,19 @@ pub async fn baja(
 )]
 pub async fn cambio(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<TiposCostoInput>,
 ) -> (StatusCode, Json<Value>) {
     debug!(id = ?body.id, "PUT /ppto/tipos-costo");
+
+    let tenant_id = match auth_user.tenant_uuid() { Ok(t) => t, Err(e) => return e };
 
     let Some(_) = body.id else {
         return (StatusCode::BAD_REQUEST, Json(json!({ "codigo": -1, "mensaje": "El campo id es requerido para cambio" })));
     };
 
     let tpo = input_to_model(body);
-    let ret = svc::cambio(&state.postgres, &tpo).await;
+    let ret = svc::cambio(&state.postgres, &tpo, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("PUT /ppto/tipos-costo ← 200 OK afectado={}", ret.afectado);
@@ -161,11 +172,14 @@ pub async fn cambio(
 )]
 pub async fn consulta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /ppto/tipos-costo/{}", id);
 
-    match svc::consulta(&state.postgres, id).await {
+    let tenant_id = match auth_user.tenant_uuid() { Ok(t) => t, Err(e) => return e };
+
+    match svc::consulta(&state.postgres, id, tenant_id).await {
         Ok(Some(t)) => {
             info!("GET /ppto/tipos-costo/{} ← 200", id);
             (StatusCode::OK, Json(tipo_json(&t)))
@@ -198,12 +212,15 @@ pub async fn consulta(
 )]
 pub async fn carga_tipos(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<TiposCostoQuery>,
 ) -> (StatusCode, Json<Value>) {
     let activos = q.activos.unwrap_or(true);
     debug!(activos, "GET /ppto/tipos-costo");
 
-    match svc::carga_tipos(&state.postgres, activos).await {
+    let tenant_id = match auth_user.tenant_uuid() { Ok(t) => t, Err(e) => return e };
+
+    match svc::carga_tipos(&state.postgres, activos, tenant_id).await {
         Ok(lista) => {
             info!("GET /ppto/tipos-costo?activos={} ← 200 {} registros", activos, lista.len());
             let items: Vec<Value> = lista.iter().map(tipo_json).collect();

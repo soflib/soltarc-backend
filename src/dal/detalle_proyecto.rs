@@ -170,10 +170,11 @@ pub async fn consulta_partidas_xref(pool: &PgPool, proyecto: i32) -> Result<Vec<
 // ─────────────────────────────────────────────
 // NODOS DESC — pdo_sp_PartidasFecDep_QRYUPDdes
 // ─────────────────────────────────────────────
-pub async fn nodos_desc(pool: &PgPool, nodo_raiz: &str) -> Result<Vec<DetalleProyectos>, ReturnCode> {
+pub async fn nodos_desc(pool: &PgPool, proyecto: i32, nodo_raiz: &str) -> Result<Vec<DetalleProyectos>, ReturnCode> {
     let result = sqlx::query_as::<_, DetalleProyectos>(
-        "SELECT * FROM arqeth.pdo_sp_PartidasFecDep_QRYUPDdes($1)"
+        "SELECT * FROM arqeth.pdo_sp_PartidasFecDep_QRYUPDdes($1, $2)"
     )
+    .bind(proyecto)
     .bind(nodo_raiz)
     .fetch_all(pool)
     .await;
@@ -190,6 +191,7 @@ pub async fn nodos_desc(pool: &PgPool, nodo_raiz: &str) -> Result<Vec<DetallePro
 // ─────────────────────────────────────────────
 pub async fn actualiza_fechas(
     pool: &PgPool,
+    proyecto: i32,
     nodo: &str,
     fecha_ini: Date,
     fecha_fin: Date,
@@ -197,8 +199,9 @@ pub async fn actualiza_fechas(
     fecha_termino: Date,
 ) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.pdo_sp_PartidasFecDep_UPDdesFech($1, $2, $3, $4, $5)"
+        "SELECT arqeth.pdo_sp_PartidasFecDep_UPDdesFech($1, $2, $3, $4, $5, $6)"
     )
+    .bind(proyecto)
     .bind(nodo)
     .bind(fecha_ini)
     .bind(fecha_fin)

@@ -1,5 +1,5 @@
 // Programa...: services::operaciones::proyectos
-// Descripción: Lógica de negocio para proyectos
+// Descripción: Lógica de negocio para proyectos (multi-tenant)
 // Origen.....: oProyectos.cs
 //
 // DAL que usa:
@@ -19,29 +19,30 @@ use crate::domain::models::proyectos::Proyectos;
 use crate::infrastructure::db::return_code::ReturnCode;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
+use uuid::Uuid;
 
-pub async fn alta(pool: &PgPool, proy: &Proyectos) -> ReturnCode {
-    dal::alta(pool, proy).await
+pub async fn alta(pool: &PgPool, proy: &Proyectos, tenant_id: Uuid) -> ReturnCode {
+    dal::alta(pool, proy, tenant_id).await
 }
 
-pub async fn baja(pool: &PgPool, id: i32) -> ReturnCode {
-    dal::baja(pool, id).await
+pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
+    dal::baja(pool, id, tenant_id).await
 }
 
-pub async fn cambio(pool: &PgPool, proy: &Proyectos) -> ReturnCode {
-    dal::cambio(pool, proy).await
+pub async fn cambio(pool: &PgPool, proy: &Proyectos, tenant_id: Uuid) -> ReturnCode {
+    dal::cambio(pool, proy, tenant_id).await
 }
 
 pub async fn gpo_usr_proyecto(pool: &PgPool, proyecto: i32, grupo: i32, usuario: i32) -> ReturnCode {
     dal::gpo_usr_proyecto(pool, proyecto, grupo, usuario).await
 }
 
-pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<Proyectos>, ReturnCode> {
-    dal::consulta(pool, id).await
+pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<Proyectos>, ReturnCode> {
+    dal::consulta(pool, id, tenant_id).await
 }
 
-pub async fn llena_proyectos(pool: &PgPool, activos: bool) -> Result<Vec<Proyectos>, ReturnCode> {
-    dal::llena_proyectos(pool, activos).await
+pub async fn llena_proyectos(pool: &PgPool, activos: bool, tenant_id: Uuid) -> Result<Vec<Proyectos>, ReturnCode> {
+    dal::llena_proyectos(pool, activos, tenant_id).await
 }
 
 pub async fn cliente_proyecto(pool: &PgPool, proyecto: i32) -> Result<String, ReturnCode> {
@@ -74,6 +75,6 @@ pub async fn usuarios_grupo(
 // LOOKUP — autocomplete proyectos activos
 // Etiqueta del SP: "<nombre proyecto> — <cliente>"
 // ─────────────────────────────────────────────
-pub async fn lookup(pool: &PgPool, q: &str, limit: i32) -> Result<Vec<LookupItem>, ReturnCode> {
-    dal::lookup(pool, q, limit).await
+pub async fn lookup(pool: &PgPool, q: &str, cliente: Option<i32>, limit: i32, tenant_id: Uuid) -> Result<Vec<LookupItem>, ReturnCode> {
+    dal::lookup(pool, q, cliente, limit, tenant_id).await
 }

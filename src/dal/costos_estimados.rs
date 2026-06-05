@@ -17,13 +17,14 @@
 use crate::domain::models::costos_estimados::CostosEstimados;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 // ─────────────────────────────────────────────
 // ALTA — ppto_sp_CostosEstimados_Add
 // ─────────────────────────────────────────────
-pub async fn alta(pool: &PgPool, cos: &CostosEstimados) -> ReturnCode {
+pub async fn alta(pool: &PgPool, cos: &CostosEstimados, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_CostosEstimados_Add($1, $2, $3, $4, $5, $6, $7)"
+        "SELECT arqeth.ppto_sp_CostosEstimados_Add($1, $2, $3, $4, $5, $6, $7, $8)"
     )
     .bind(cos.tipo)
     .bind(&cos.nombre)
@@ -32,6 +33,7 @@ pub async fn alta(pool: &PgPool, cos: &CostosEstimados) -> ReturnCode {
     .bind(cos.fecha)
     .bind(cos.importe)
     .bind(cos.activo)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -45,11 +47,12 @@ pub async fn alta(pool: &PgPool, cos: &CostosEstimados) -> ReturnCode {
 // ─────────────────────────────────────────────
 // BAJA — ppto_sp_CostosEstimados_DEL
 // ─────────────────────────────────────────────
-pub async fn baja(pool: &PgPool, id: i32) -> ReturnCode {
+pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_CostosEstimados_DEL($1)"
+        "SELECT arqeth.ppto_sp_CostosEstimados_DEL($1, $2)"
     )
     .bind(id)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -63,9 +66,9 @@ pub async fn baja(pool: &PgPool, id: i32) -> ReturnCode {
 // ─────────────────────────────────────────────
 // CAMBIOS — ppto_sp_CostosEstimados_UPD
 // ─────────────────────────────────────────────
-pub async fn cambios(pool: &PgPool, cos: &CostosEstimados) -> ReturnCode {
+pub async fn cambios(pool: &PgPool, cos: &CostosEstimados, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_CostosEstimados_UPD($1, $2, $3, $4, $5, $6, $7, $8)"
+        "SELECT arqeth.ppto_sp_CostosEstimados_UPD($1, $2, $3, $4, $5, $6, $7, $8, $9)"
     )
     .bind(cos.id)
     .bind(cos.tipo)
@@ -75,6 +78,7 @@ pub async fn cambios(pool: &PgPool, cos: &CostosEstimados) -> ReturnCode {
     .bind(cos.fecha)
     .bind(cos.importe)
     .bind(cos.activo)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -88,11 +92,12 @@ pub async fn cambios(pool: &PgPool, cos: &CostosEstimados) -> ReturnCode {
 // ─────────────────────────────────────────────
 // CONSULTA — ppto_sp_CostosEstimados_QRY
 // ─────────────────────────────────────────────
-pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<CostosEstimados>, ReturnCode> {
+pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<CostosEstimados>, ReturnCode> {
     let result = sqlx::query_as::<_, CostosEstimados>(
-        "SELECT * FROM arqeth.ppto_sp_CostosEstimados_QRY($1)"
+        "SELECT * FROM arqeth.ppto_sp_CostosEstimados_QRY($1, $2)"
     )
     .bind(id)
+    .bind(tenant_id)
     .fetch_optional(pool)
     .await;
 
@@ -107,11 +112,12 @@ pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<CostosEstimados>,
 // Reemplaza CargaArbol(): devuelve los datos crudos para que
 // la capa de presentación construya la jerarquía que necesite.
 // ─────────────────────────────────────────────
-pub async fn obtiene_activos(pool: &PgPool, activos: bool) -> Result<Vec<CostosEstimados>, ReturnCode> {
+pub async fn obtiene_activos(pool: &PgPool, activos: bool, tenant_id: Uuid) -> Result<Vec<CostosEstimados>, ReturnCode> {
     let result = sqlx::query_as::<_, CostosEstimados>(
-        "SELECT * FROM arqeth.ppto_sp_CostosEstimados_LSTACT($1)"
+        "SELECT * FROM arqeth.ppto_sp_CostosEstimados_LSTACT($1, $2)"
     )
     .bind(activos)
+    .bind(tenant_id)
     .fetch_all(pool)
     .await;
 

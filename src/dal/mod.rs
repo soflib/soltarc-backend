@@ -14,6 +14,7 @@ pub mod partidas_ppto;
 pub mod plan_obra;
 pub mod plan_semanal;
 pub mod ppto_a_proyecto;
+pub mod ppto_seed;
 pub mod presupuesto;
 pub mod proveedores;
 pub mod proyectos;

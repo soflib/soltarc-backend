@@ -8,11 +8,13 @@
 use axum::{
     extract::{Path, State},
     http::StatusCode,
+    Extension,
     Json,
 };
 use serde_json::{json, Value};
 use tracing::{debug, error, info};
 
+use crate::api::middleware::roles::AuthUser;
 use crate::infrastructure::db::app_state::AppState;
 use crate::services::clients::account_statement as svc;
 
@@ -29,11 +31,17 @@ use crate::services::clients::account_statement as svc;
 )]
 pub async fn account_statement(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /clients/portal/clients/{}/account-statement", id);
 
-    let nombre_ret = svc::nombre_cliente(&state.postgres, id).await;
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    let nombre_ret = svc::nombre_cliente(&state.postgres, id, tenant_id).await;
 
     match svc::estado_de_cuenta(&state.postgres, id).await {
         Ok(movimientos) => {

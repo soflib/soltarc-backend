@@ -1,5 +1,5 @@
 // Programa...: handler::catalog_g::mtto_center_costs
-// Descripción: Endpoints HTTP para Centros de costo
+// Descripción: Endpoints HTTP para Centros de costo (multi-tenant)
 // Origen.....: MttoCentrosCosto.aspx.cs
 //
 // Rutas:
@@ -8,10 +8,12 @@
 //   PUT    /catalog/cost-centers           → cambios
 //   GET    /catalog/cost-centers/{id}      → consulta
 //   GET    /catalog/cost-centers           → obtiene_centros  (?activos=bool, default true)
+//   GET    /catalog/cost-centers/lookup    → lookup           (?q=...&limit=...)
 
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
+    Extension,
     Json,
 };
 use serde::Deserialize;
@@ -19,6 +21,7 @@ use serde_json::{json, Value};
 use utoipa::ToSchema;
 use tracing::{debug, error, info};
 
+use crate::api::middleware::roles::AuthUser;
 use crate::domain::models::centros_costo::CentrosCosto;
 use crate::domain::models::lookup::LookupItem;
 use crate::infrastructure::db::app_state::AppState;
@@ -59,9 +62,15 @@ pub struct FiltroActivos {
 )]
 pub async fn alta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<CentroCostoInput>,
 ) -> (StatusCode, Json<Value>) {
     info!("POST /catalog/cost-centers → nombre='{}' tipo={}", body.nombre, body.tipo);
+
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
 
     let cen = CentrosCosto {
         id:          body.id.unwrap_or(0),
@@ -69,8 +78,9 @@ pub async fn alta(
         tipo:        body.tipo,
         comentarios: body.comentarios,
         activo:      body.activo,
+        tenant_id:   None, // lo fija el SP a partir del p_tenant_id
     };
-    let ret = svc::alta(&state.postgres, &cen).await;
+    let ret = svc::alta(&state.postgres, &cen, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("POST /catalog/cost-centers ← 201 afectado={}", ret.afectado);
@@ -96,11 +106,17 @@ pub async fn alta(
 )]
 pub async fn baja(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     info!("DELETE /catalog/cost-centers/{}", id);
 
-    let ret = svc::baja(&state.postgres, id).await;
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    let ret = svc::baja(&state.postgres, id, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("DELETE /catalog/cost-centers/{} ← 200 OK", id);
@@ -126,6 +142,7 @@ pub async fn baja(
 )]
 pub async fn cambios(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<CentroCostoInput>,
 ) -> (StatusCode, Json<Value>) {
     info!("PUT /catalog/cost-centers → id={:?} nombre='{}'", body.id, body.nombre);
@@ -137,14 +154,21 @@ pub async fn cambios(
             Json(json!({ "codigo": -1, "mensaje": "El campo id es requerido para cambios" })),
         );
     };
+
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
     let cen = CentrosCosto {
         id,
         nombre:      body.nombre,
         tipo:        body.tipo,
         comentarios: body.comentarios,
         activo:      body.activo,
+        tenant_id:   None,
     };
-    let ret = svc::cambios(&state.postgres, &cen).await;
+    let ret = svc::cambios(&state.postgres, &cen, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("PUT /catalog/cost-centers ← 200 OK afectado={}", ret.afectado);
@@ -171,11 +195,17 @@ pub async fn cambios(
 )]
 pub async fn consulta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /catalog/cost-centers/{}", id);
 
-    match svc::consulta(&state.postgres, id).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::consulta(&state.postgres, id, tenant_id).await {
         Ok(Some(c)) => {
             info!("GET /catalog/cost-centers/{} ← 200 nombre='{}'", id, c.nombre);
             (StatusCode::OK, Json(json!({
@@ -184,6 +214,7 @@ pub async fn consulta(
                 "tipo":        c.tipo,
                 "comentarios": c.comentarios,
                 "activo":      c.activo,
+                "tenant_id":   c.tenant_id.map(|u| u.to_string()),
             })))
         }
         Ok(None) => {
@@ -213,12 +244,18 @@ pub async fn consulta(
 )]
 pub async fn obtiene_centros(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(filtro): Query<FiltroActivos>,
 ) -> (StatusCode, Json<Value>) {
     let activos = filtro.activos.unwrap_or(true);
     debug!("GET /catalog/cost-centers?activos={}", activos);
 
-    match svc::obtiene_centros(&state.postgres, activos).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::obtiene_centros(&state.postgres, activos, tenant_id).await {
         Ok(lista) => {
             info!("GET /catalog/cost-centers ← 200 {} registros", lista.len());
             (StatusCode::OK, Json(json!(lista.iter().map(|c| json!({
@@ -227,6 +264,7 @@ pub async fn obtiene_centros(
                 "tipo":        c.tipo,
                 "comentarios": c.comentarios,
                 "activo":      c.activo,
+                "tenant_id":   c.tenant_id.map(|u| u.to_string()),
             })).collect::<Vec<_>>())))
         }
         Err(ret) if ret.codigo < -50 => {
@@ -259,13 +297,19 @@ pub async fn obtiene_centros(
 )]
 pub async fn lookup(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<LookupQuery>,
 ) -> (StatusCode, Json<Value>) {
     let qs    = q.q.unwrap_or_default();
     let limit = q.limit.unwrap_or(20).clamp(1, 100);
     debug!("GET /catalog/cost-centers/lookup q='{}' limit={}", qs, limit);
 
-    match svc::lookup(&state.postgres, &qs, limit).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::lookup(&state.postgres, &qs, limit, tenant_id).await {
         Ok(items) => {
             info!("GET /catalog/cost-centers/lookup ← 200 {} items", items.len());
             let payload: Vec<LookupItem> = items;

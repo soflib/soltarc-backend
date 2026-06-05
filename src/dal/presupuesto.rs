@@ -17,24 +17,27 @@ use crate::domain::models::lookup::LookupItem;
 use crate::domain::models::presupuesto::Presupuesto;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 // ─────────────────────────────────────────────
 // ALTA — ppto_sp_Presupuesto_Add
 // ─────────────────────────────────────────────
-pub async fn alta(pool: &PgPool, ppto: &Presupuesto) -> ReturnCode {
+pub async fn alta(pool: &PgPool, ppto: &Presupuesto, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_Presupuesto_Add($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)"
+        "SELECT arqeth.ppto_sp_Presupuesto_Add($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"
     )
     .bind(&ppto.nombre)
     .bind(&ppto.descripcion)
     .bind(&ppto.direccion)
     .bind(&ppto.comentarios)
+    .bind(&ppto.fecha)
     .bind(ppto.cliente)
     .bind(ppto.activo)
     .bind(ppto.estado)
     .bind(&ppto.pie_pagina)
     .bind(ppto.gn_id)
     .bind(ppto.gn_user_id)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -48,11 +51,12 @@ pub async fn alta(pool: &PgPool, ppto: &Presupuesto) -> ReturnCode {
 // ─────────────────────────────────────────────
 // BAJA — ppto_sp_Presupuesto_DEL
 // ─────────────────────────────────────────────
-pub async fn baja(pool: &PgPool, id: i32) -> ReturnCode {
+pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_Presupuesto_DEL($1)"
+        "SELECT arqeth.ppto_sp_Presupuesto_DEL($1, $2)"
     )
     .bind(id)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -66,19 +70,21 @@ pub async fn baja(pool: &PgPool, id: i32) -> ReturnCode {
 // ─────────────────────────────────────────────
 // CAMBIO — ppto_sp_Presupuesto_UPD
 // ─────────────────────────────────────────────
-pub async fn cambio(pool: &PgPool, ppto: &Presupuesto) -> ReturnCode {
+pub async fn cambio(pool: &PgPool, ppto: &Presupuesto, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_Presupuesto_UPD($1,$2,$3,$4,$5,$6,$7,$8,$9)"
+        "SELECT arqeth.ppto_sp_Presupuesto_UPD($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)"
     )
     .bind(ppto.id.unwrap_or(0))  // id es Option<i32> — 0 nunca debería llegar aquí
     .bind(&ppto.nombre)
     .bind(&ppto.descripcion)
     .bind(&ppto.direccion)
     .bind(&ppto.comentarios)
+    .bind(&ppto.fecha)
     .bind(ppto.cliente)
     .bind(ppto.activo)
     .bind(ppto.estado)
     .bind(&ppto.pie_pagina)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -92,11 +98,12 @@ pub async fn cambio(pool: &PgPool, ppto: &Presupuesto) -> ReturnCode {
 // ─────────────────────────────────────────────
 // CONSULTA — ppto_sp_Presupuesto_QRY
 // ─────────────────────────────────────────────
-pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<Presupuesto>, ReturnCode> {
+pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<Presupuesto>, ReturnCode> {
     let result = sqlx::query_as::<_, Presupuesto>(
-        "SELECT * FROM arqeth.ppto_sp_Presupuesto_QRY($1)"
+        "SELECT * FROM arqeth.ppto_sp_Presupuesto_QRY($1, $2)"
     )
     .bind(id)
+    .bind(tenant_id)
     .fetch_optional(pool)
     .await;
 
@@ -116,14 +123,16 @@ pub async fn carga_presupuestos(
     gpo_user_id: i32,
     usr_nivel: i32,
     activos: bool,
+    tenant_id: Uuid,
 ) -> Result<Vec<Presupuesto>, ReturnCode> {
     let result = sqlx::query_as::<_, Presupuesto>(
-        "SELECT * FROM arqeth.ppto_sp_Presupuesto_LSTACT($1, $2, $3, $4)"
+        "SELECT * FROM arqeth.ppto_sp_Presupuesto_LSTACT($1, $2, $3, $4, $5)"
     )
     .bind(gpo_neg)
     .bind(gpo_user_id)
     .bind(usr_nivel)
     .bind(activos)
+    .bind(tenant_id)
     .fetch_all(pool)
     .await;
 
@@ -138,13 +147,14 @@ pub async fn carga_presupuestos(
 // LOOKUP — ppto_sp_presupuesto_lookup
 // Acepta filtro opcional por cliente (None = todos).
 // ─────────────────────────────────────────────
-pub async fn lookup(pool: &PgPool, q: &str, cliente: Option<i32>, limit: i32) -> Result<Vec<LookupItem>, ReturnCode> {
+pub async fn lookup(pool: &PgPool, q: &str, cliente: Option<i32>, limit: i32, tenant_id: Uuid) -> Result<Vec<LookupItem>, ReturnCode> {
     let result = sqlx::query_as::<_, LookupItem>(
-        "SELECT id, etiqueta FROM arqeth.ppto_sp_presupuesto_lookup($1, $2, $3)"
+        "SELECT id, etiqueta FROM arqeth.ppto_sp_presupuesto_lookup($1, $2, $3, $4)"
     )
     .bind(q)
     .bind(cliente)
     .bind(limit)
+    .bind(tenant_id)
     .fetch_all(pool)
     .await;
 

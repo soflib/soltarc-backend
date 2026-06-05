@@ -8,6 +8,7 @@
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
+    Extension,
     Json,
 };
 use chrono::NaiveDateTime;
@@ -17,6 +18,7 @@ use serde_json::{json, Value};
 use utoipa::ToSchema;
 use tracing::{debug, error, info};
 
+use crate::api::middleware::roles::AuthUser;
 use crate::domain::models::costos_estimados::CostosEstimados;
 use crate::infrastructure::db::app_state::AppState;
 use crate::services::ppto::costos_estimados as svc;
@@ -84,9 +86,15 @@ fn costo_json(c: &CostosEstimados) -> Value {
 )]
 pub async fn alta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<CostosEstimadosInput>,
 ) -> (StatusCode, Json<Value>) {
     debug!(nombre = %body.nombre, "POST /ppto/costos-estimados");
+
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
 
     let cos = match parse_input(body) {
         Ok(c)    => c,
@@ -96,7 +104,7 @@ pub async fn alta(
         }
     };
 
-    let ret = svc::alta(&state.postgres, &cos).await;
+    let ret = svc::alta(&state.postgres, &cos, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("POST /ppto/costos-estimados ← 201 id={}", ret.afectado);
@@ -121,11 +129,17 @@ pub async fn alta(
 )]
 pub async fn baja(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     info!("DELETE /ppto/costos-estimados/{}", id);
 
-    let ret = svc::baja(&state.postgres, id).await;
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    let ret = svc::baja(&state.postgres, id, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("DELETE /ppto/costos-estimados/{} ← 200 OK", id);
@@ -150,12 +164,18 @@ pub async fn baja(
 )]
 pub async fn cambios(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<CostosEstimadosInput>,
 ) -> (StatusCode, Json<Value>) {
     debug!(id = ?body.id, "PUT /ppto/costos-estimados");
 
     let Some(_) = body.id else {
         return (StatusCode::BAD_REQUEST, Json(json!({ "codigo": -1, "mensaje": "El campo id es requerido para cambios" })));
+    };
+
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
     };
 
     let cos = match parse_input(body) {
@@ -166,7 +186,7 @@ pub async fn cambios(
         }
     };
 
-    let ret = svc::cambios(&state.postgres, &cos).await;
+    let ret = svc::cambios(&state.postgres, &cos, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("PUT /ppto/costos-estimados ← 200 OK afectado={}", ret.afectado);
@@ -192,11 +212,17 @@ pub async fn cambios(
 )]
 pub async fn consulta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /ppto/costos-estimados/{}", id);
 
-    match svc::consulta(&state.postgres, id).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::consulta(&state.postgres, id, tenant_id).await {
         Ok(Some(c)) => {
             info!("GET /ppto/costos-estimados/{} ← 200", id);
             (StatusCode::OK, Json(costo_json(&c)))
@@ -229,12 +255,18 @@ pub async fn consulta(
 )]
 pub async fn carga_arbol(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<CostosEstimadosQuery>,
 ) -> (StatusCode, Json<Value>) {
     let activos = q.activos.unwrap_or(true);
     debug!(activos, "GET /ppto/costos-estimados");
 
-    match svc::carga_arbol(&state.postgres, activos).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::carga_arbol(&state.postgres, activos, tenant_id).await {
         Ok(lista) => {
             info!("GET /ppto/costos-estimados?activos={} ← 200 {} registros", activos, lista.len());
             let items: Vec<Value> = lista.iter().map(costo_json).collect();

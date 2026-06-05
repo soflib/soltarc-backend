@@ -182,9 +182,8 @@ pub async fn consulta(
         ("activos" = Option<bool>, Query, description = "true = solo activos, false = todos"),
     ),
     responses(
-        (status = 200, description = "Lista de grupos",        body = Value),
-        (status = 404, description = "Sin grupos",             body = Value),
-        (status = 500, description = "Error de base de datos", body = Value),
+        (status = 200, description = "Lista de grupos (vacía si no hay registros)", body = Value),
+        (status = 500, description = "Error de base de datos",                      body = Value),
     ),
     tag = "SistemaGrupos"
 )]
@@ -201,8 +200,12 @@ pub async fn obtiene_todo(
             let items: Vec<Value> = lista.iter().map(grupo_json).collect();
             (StatusCode::OK, Json(json!({ "grupos": items, "total": items.len() })))
         }
-        Err(rc) if rc.codigo > -75 => {
-            (StatusCode::NOT_FOUND, Json(json!({ "codigo": rc.codigo, "mensaje": rc.mensaje })))
+        // DAL returns codigo -21 ("No hay entradas") when the table is empty.
+        // Treat that as an empty list (200), not a missing resource (404), so callers
+        // that combine multiple list calls don't blow up on first-time setup.
+        Err(rc) if rc.codigo == -21 => {
+            info!("GET /sistema/grupos?activos={} ← 200 [] (sin registros)", activos);
+            (StatusCode::OK, Json(json!({ "grupos": [], "total": 0 })))
         }
         Err(rc) => {
             error!("GET /sistema/grupos ← 500 codigo={}", rc.codigo);

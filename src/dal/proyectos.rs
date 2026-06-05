@@ -1,15 +1,17 @@
 // Programa...: proyectos
-// Descripción: Operaciones de la tabla cpa_Proyectos
+// Descripción: Operaciones de la tabla cpa_Proyectos (multi-tenant)
 // Origen.....: oProyectos.cs
 //
 // Stored Procedures que usa:
-//   sp_cpa_ProyectosAdd       → alta
-//   sp_cpa_ProyectosDel       → baja
-//   sp_cpa_ProyectosUpd       → cambio
+//   sp_cpa_ProyectosAdd       → alta              (..., tenant_id)
+//   sp_cpa_ProyectosDel       → baja              (id, tenant_id)
+//   sp_cpa_ProyectosUpd       → cambios           (id, ..., tenant_id)
 //   sp_cpa_ProyectosUpdGpoUsr → actualiza grupo/usuario del proyecto
-//   sp_cpa_ProyectosQry       → consulta por id
-//   sp_cpa_ProyectosLstAct    → lista activos/todos
+//   sp_cpa_ProyectosQry       → consulta por id   (id, tenant_id)
+//   sp_cpa_ProyectosLstAct    → lista activos     (activos, tenant_id)
 //   sp_cpa_ProyectosTotalPPTO → total presupuesto del proyecto
+//   sp_cpa_proyectos_lookup   → autocomplete      (q, limit, tenant_id)
+//   sp_cpa_proyectos_seed     → seed por tenant   (tenant_id)
 //
 // SQL inline migrado a SPs dedicados:
 //   sp_cpa_ProyectoClienteNombre → reemplaza JOIN inline para nombre cliente
@@ -19,13 +21,14 @@ use crate::domain::models::lookup::LookupItem;
 use crate::domain::models::proyectos::Proyectos;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 // ─────────────────────────────────────────────
 // ALTA — sp_cpa_ProyectosAdd
 // ─────────────────────────────────────────────
-pub async fn alta(pool: &PgPool, proy: &Proyectos) -> ReturnCode {
+pub async fn alta(pool: &PgPool, proy: &Proyectos, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_ProyectosAdd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)"
+        "SELECT arqeth.sp_cpa_ProyectosAdd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)"
     )
     .bind(proy.tipo)
     .bind(&proy.nombre)
@@ -42,6 +45,7 @@ pub async fn alta(pool: &PgPool, proy: &Proyectos) -> ReturnCode {
     .bind(&proy.dir_imagenes)
     .bind(proy.gn_id)
     .bind(proy.gn_usr_id)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -56,11 +60,12 @@ pub async fn alta(pool: &PgPool, proy: &Proyectos) -> ReturnCode {
 // BAJA — sp_cpa_ProyectosDel
 // El SP devuelve (codigo, mensaje, afectado) como ResultSet
 // ─────────────────────────────────────────────
-pub async fn baja(pool: &PgPool, proyecto: i32) -> ReturnCode {
+pub async fn baja(pool: &PgPool, proyecto: i32, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_as::<_, ReturnCode>(
-        "SELECT codigo, mensaje, afectado FROM arqeth.sp_cpa_ProyectosDel($1)"
+        "SELECT codigo, mensaje, afectado FROM arqeth.sp_cpa_ProyectosDel($1, $2)"
     )
     .bind(proyecto)
+    .bind(tenant_id)
     .fetch_optional(pool)
     .await;
 
@@ -74,9 +79,9 @@ pub async fn baja(pool: &PgPool, proyecto: i32) -> ReturnCode {
 // ─────────────────────────────────────────────
 // CAMBIO — sp_cpa_ProyectosUpd
 // ─────────────────────────────────────────────
-pub async fn cambio(pool: &PgPool, proy: &Proyectos) -> ReturnCode {
+pub async fn cambio(pool: &PgPool, proy: &Proyectos, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_ProyectosUpd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)"
+        "SELECT arqeth.sp_cpa_ProyectosUpd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)"
     )
     .bind(proy.id)
     .bind(proy.tipo)
@@ -92,6 +97,7 @@ pub async fn cambio(pool: &PgPool, proy: &Proyectos) -> ReturnCode {
     .bind(proy.cliente)
     .bind(proy.activo)
     .bind(&proy.dir_imagenes)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -125,11 +131,12 @@ pub async fn gpo_usr_proyecto(pool: &PgPool, proyecto: i32, grupo: i32, usuario:
 // ─────────────────────────────────────────────
 // CONSULTA — sp_cpa_ProyectosQry
 // ─────────────────────────────────────────────
-pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<Proyectos>, ReturnCode> {
+pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<Proyectos>, ReturnCode> {
     let result = sqlx::query_as::<_, Proyectos>(
-        "SELECT * FROM arqeth.sp_cpa_ProyectosQry($1)"
+        "SELECT * FROM arqeth.sp_cpa_ProyectosQry($1, $2)"
     )
     .bind(id)
+    .bind(tenant_id)
     .fetch_optional(pool)
     .await;
 
@@ -142,11 +149,12 @@ pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<Proyectos>, Retur
 // ─────────────────────────────────────────────
 // LLENA PROYECTOS — sp_cpa_ProyectosLstAct
 // ─────────────────────────────────────────────
-pub async fn llena_proyectos(pool: &PgPool, activos: bool) -> Result<Vec<Proyectos>, ReturnCode> {
+pub async fn llena_proyectos(pool: &PgPool, activos: bool, tenant_id: Uuid) -> Result<Vec<Proyectos>, ReturnCode> {
     let result = sqlx::query_as::<_, Proyectos>(
-        "SELECT * FROM arqeth.sp_cpa_ProyectosLstAct($1)"
+        "SELECT * FROM arqeth.sp_cpa_ProyectosLstAct($1, $2)"
     )
     .bind(activos)
+    .bind(tenant_id)
     .fetch_all(pool)
     .await;
 
@@ -232,12 +240,14 @@ pub async fn total_ppto(pool: &PgPool, proyecto: i32) -> Result<rust_decimal::De
 // LOOKUP — sp_cpa_proyectos_lookup
 // Etiqueta: "<nombre del proyecto> — <cliente>"
 // ─────────────────────────────────────────────
-pub async fn lookup(pool: &PgPool, q: &str, limit: i32) -> Result<Vec<LookupItem>, ReturnCode> {
+pub async fn lookup(pool: &PgPool, q: &str, cliente: Option<i32>, limit: i32, tenant_id: Uuid) -> Result<Vec<LookupItem>, ReturnCode> {
     let result = sqlx::query_as::<_, LookupItem>(
-        "SELECT id, etiqueta FROM arqeth.sp_cpa_proyectos_lookup($1, $2)"
+        "SELECT id, etiqueta FROM arqeth.sp_cpa_proyectos_lookup($1, $2, $3, $4)"
     )
     .bind(q)
+    .bind(cliente)   // None / 0 = todos los proyectos del tenant
     .bind(limit)
+    .bind(tenant_id)
     .fetch_all(pool)
     .await;
 
@@ -245,4 +255,15 @@ pub async fn lookup(pool: &PgPool, q: &str, limit: i32) -> Result<Vec<LookupItem
         Ok(lista) => Ok(lista),
         Err(e)    => Err(ReturnCode { codigo: -95, afectado: 0, mensaje: e.to_string() }),
     }
+}
+
+// ─────────────────────────────────────────────
+// SEED por tenant — sp_cpa_proyectos_seed
+// Idempotente: re-llamarlo para el mismo tenant no duplica filas.
+// ─────────────────────────────────────────────
+pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid) -> Result<i32, sqlx::Error> {
+    sqlx::query_scalar::<_, i32>("SELECT arqeth.sp_cpa_proyectos_seed($1)")
+        .bind(tenant_id)
+        .fetch_one(pool)
+        .await
 }

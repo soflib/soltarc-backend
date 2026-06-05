@@ -74,7 +74,21 @@ pub async fn chat(
             }
         },
         Err(e) => {
-            error!("agents-core call failed: {}", e);
+            let mut chain = format!("{}", e);
+            let mut source = std::error::Error::source(&e);
+            while let Some(s) = source {
+                chain.push_str(" | caused by: ");
+                chain.push_str(&format!("{}", s));
+                source = s.source();
+            }
+            error!(
+                "agents-core call failed url={} is_connect={} is_timeout={} is_request={} chain=\"{}\"",
+                url,
+                e.is_connect(),
+                e.is_timeout(),
+                e.is_request(),
+                chain
+            );
             Json(json!({ "error": "Error al conectar con el agente IA" }))
         }
     }

@@ -8,6 +8,7 @@
 use axum::{
     extract::{Path, State},
     http::StatusCode,
+    Extension,
     Json,
 };
 use serde::Deserialize;
@@ -15,6 +16,7 @@ use serde_json::{json, Value};
 use utoipa::ToSchema;
 use tracing::{debug, error, info};
 
+use crate::api::middleware::roles::AuthUser;
 use crate::domain::models::unidades::Unidades;
 use crate::infrastructure::db::app_state::AppState;
 use crate::services::ppto::unidades as svc;
@@ -62,12 +64,18 @@ fn unidad_json(u: &Unidades) -> Value {
 )]
 pub async fn alta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<UnidadesInput>,
 ) -> (StatusCode, Json<Value>) {
     debug!(nombre_corto = %body.nombre_corto, "POST /ppto/unidades");
 
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
     let uni = input_to_model(body);
-    let ret = svc::alta(&state.postgres, &uni).await;
+    let ret = svc::alta(&state.postgres, &uni, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("POST /ppto/unidades ← 201 id={}", ret.afectado);
@@ -92,11 +100,17 @@ pub async fn alta(
 )]
 pub async fn baja(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     info!("DELETE /ppto/unidades/{}", id);
 
-    let ret = svc::baja(&state.postgres, id).await;
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    let ret = svc::baja(&state.postgres, id, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("DELETE /ppto/unidades/{} ← 200 OK", id);
@@ -121,6 +135,7 @@ pub async fn baja(
 )]
 pub async fn cambio(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<UnidadesInput>,
 ) -> (StatusCode, Json<Value>) {
     debug!(id = ?body.id, "PUT /ppto/unidades");
@@ -129,8 +144,13 @@ pub async fn cambio(
         return (StatusCode::BAD_REQUEST, Json(json!({ "codigo": -1, "mensaje": "El campo id es requerido para cambio" })));
     };
 
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
     let uni = input_to_model(body);
-    let ret = svc::cambio(&state.postgres, &uni).await;
+    let ret = svc::cambio(&state.postgres, &uni, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("PUT /ppto/unidades ← 200 OK afectado={}", ret.afectado);
@@ -156,11 +176,17 @@ pub async fn cambio(
 )]
 pub async fn consulta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /ppto/unidades/{}", id);
 
-    match svc::consulta(&state.postgres, id).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::consulta(&state.postgres, id, tenant_id).await {
         Ok(Some(u)) => {
             info!("GET /ppto/unidades/{} ← 200", id);
             (StatusCode::OK, Json(unidad_json(&u)))
@@ -190,10 +216,16 @@ pub async fn consulta(
 )]
 pub async fn carga_arbol(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /ppto/unidades/arbol");
 
-    match svc::carga_arbol(&state.postgres).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::carga_arbol(&state.postgres, tenant_id).await {
         Ok(lista) => {
             info!("GET /ppto/unidades/arbol ← 200 {} registros", lista.len());
             let items: Vec<Value> = lista.iter().map(unidad_json).collect();
@@ -224,10 +256,16 @@ pub async fn carga_arbol(
 )]
 pub async fn obtiene_unidades(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /ppto/unidades");
 
-    match svc::obtiene_unidades(&state.postgres).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::obtiene_unidades(&state.postgres, tenant_id).await {
         Ok(lista) => {
             info!("GET /ppto/unidades ← 200 {} registros", lista.len());
             let items: Vec<Value> = lista.iter().map(unidad_json).collect();

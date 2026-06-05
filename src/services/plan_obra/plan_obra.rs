@@ -33,6 +33,6 @@ pub async fn crea_plan(
     dal::crea_plan(pool, proyecto, fecha_ini, fecha_fin, estado).await
 }
 
-pub async fn descendientes_nodo(pool: &PgPool, nodo: &str) -> Result<Vec<PlanObra>, ReturnCode> {
-    dal::descendientes_nodo(pool, nodo).await
+pub async fn descendientes_nodo(pool: &PgPool, proyecto: i32, nodo: &str) -> Result<Vec<PlanObra>, ReturnCode> {
+    dal::descendientes_nodo(pool, proyecto, nodo).await
 }

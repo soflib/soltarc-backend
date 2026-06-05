@@ -115,12 +115,10 @@ pub async fn carga_nodos(
             })).collect();
             (StatusCode::OK, Json(json!({ "nodos": items, "total": items.len() })))
         }
-        Err(rc) if rc.codigo > -75 => {
-            info!("GET /ppto/a-proyecto/nodos ← 404");
-            (StatusCode::NOT_FOUND, Json(json!({ "codigo": rc.codigo, "mensaje": rc.mensaje })))
-        }
+        // Vacío ya es Ok([]) arriba; aquí solo llega error real de BD → 500 con
+        // el mensaje (antes se enmascaraba como 404 y ocultaba el problema).
         Err(rc) => {
-            error!("GET /ppto/a-proyecto/nodos ← 500 codigo={}", rc.codigo);
+            error!("GET /ppto/a-proyecto/nodos ← 500 codigo={} msg='{}'", rc.codigo, rc.mensaje);
             (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "codigo": rc.codigo, "mensaje": rc.mensaje })))
         }
     }
@@ -198,7 +196,9 @@ pub async fn obtiene_tipo_proyecto(
             info!("GET /ppto/a-proyecto/tipo-proyecto?proyecto={} ← 200 tipo={}", q.proyecto, tipo);
             (StatusCode::OK, Json(json!({ "tipo": tipo })))
         }
-        Err(rc) if rc.codigo > -75 => {
+        // codigo -41 = proyecto realmente no existe → 404; cualquier otro
+        // (p.ej. -45 error de BD) → 500 con el mensaje, no enmascarado.
+        Err(rc) if rc.codigo == -41 => {
             info!("GET /ppto/a-proyecto/tipo-proyecto?proyecto={} ← 404", q.proyecto);
             (StatusCode::NOT_FOUND, Json(json!({ "codigo": rc.codigo, "mensaje": rc.mensaje })))
         }

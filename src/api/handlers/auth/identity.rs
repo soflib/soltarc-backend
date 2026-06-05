@@ -8,7 +8,8 @@ use axum::{extract::{Extension, State}, http::StatusCode, Json};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use utoipa::ToSchema;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
+use uuid::Uuid;
 
 use crate::api::middleware::roles::AuthUser;
 
@@ -68,6 +69,14 @@ pub async fn register(
 ) -> (StatusCode, Json<Value>) {
     debug!(email = %body.email, "POST /auth/register");
 
+    // Si body.tenant_id viene vacío → es alta de admin que auto-crea su tenant.
+    // En ese caso disparamos el seed de proveedores. Si viene poblado, es un
+    // sub-user uniéndose a un tenant existente — sus proveedores ya fueron sembrados.
+    let is_admin_registration = body
+        .tenant_id
+        .as_deref()
+        .map_or(true, str::is_empty);
+
     let req = RegisterRequest {
         email:          body.email.clone(),
         username:       body.username,
@@ -83,10 +92,46 @@ pub async fn register(
         billing_period: body.billing_period.unwrap_or_default(),
     };
 
-    let mut client = state.auth_grpc;
+    let mut client = state.auth_grpc.clone();
     match client.register(req).await {
         Ok(r) => {
             info!(email = %body.email, "POST /auth/register ← 200");
+
+            if is_admin_registration {
+                if let Some(u) = r.user.as_ref() {
+                    match Uuid::parse_str(&u.tenant_id) {
+                        Ok(tid) => {
+                            // Orden importa: catálogos primero (proveedor referencia tipo/giro
+                            // por FK de cpa_catalogos), luego proveedores y centros de costo.
+                            match crate::dal::catalog_g::seed_for_tenant(&state.postgres, tid).await {
+                                Ok(n)  => info!(tenant_id = %tid, rows = n, "seed catalogos cargado"),
+                                Err(e) => warn!(tenant_id = %tid, error = %e, "seed catalogos falló (registro OK)"),
+                            }
+                            match crate::dal::proveedores::seed_for_tenant(&state.postgres, tid).await {
+                                Ok(n)  => info!(tenant_id = %tid, rows = n, "seed proveedores cargado"),
+                                Err(e) => warn!(tenant_id = %tid, error = %e, "seed proveedores falló (registro OK)"),
+                            }
+                            match crate::dal::centros_costo::seed_for_tenant(&state.postgres, tid).await {
+                                Ok(n)  => info!(tenant_id = %tid, rows = n, "seed centros_costo cargado"),
+                                Err(e) => warn!(tenant_id = %tid, error = %e, "seed centros_costo falló (registro OK)"),
+                            }
+                            match crate::dal::clientes::seed_for_tenant(&state.postgres, tid).await {
+                                Ok(n)  => info!(tenant_id = %tid, rows = n, "seed clientes cargado"),
+                                Err(e) => warn!(tenant_id = %tid, error = %e, "seed clientes falló (registro OK)"),
+                            }
+                            // Presupuestos: catálogos (tipos de costo, unidades, costos
+                            // estimados) + 1 presupuesto demo con partidas. Va después de
+                            // clientes porque el presupuesto demo se cuelga de "Cliente 1".
+                            match crate::dal::ppto_seed::seed_for_tenant(&state.postgres, tid).await {
+                                Ok(n)  => info!(tenant_id = %tid, rows = n, "seed presupuestos cargado"),
+                                Err(e) => warn!(tenant_id = %tid, error = %e, "seed presupuestos falló (registro OK)"),
+                            }
+                        },
+                        Err(_) => warn!(raw = %u.tenant_id, "tenant_id no parseable a UUID; seeds omitidos"),
+                    }
+                }
+            }
+
             (StatusCode::OK, Json(json!({
                 "access_token": r.access_token,
                 "refresh_jti":  r.refresh_jti,

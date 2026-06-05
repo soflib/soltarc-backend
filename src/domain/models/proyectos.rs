@@ -5,7 +5,11 @@
 use chrono::NaiveDateTime;
 use rust_decimal::Decimal;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
+// tenant_id semántica:
+//   None       → no debería ocurrir en proyectos (no hay proyectos globales)
+//   Some(uuid) → proyecto PRIVADO del tenant
 #[derive(Debug, Clone, ToSchema, sqlx::FromRow)]
 pub struct Proyectos {
     pub id: i32,
@@ -25,4 +29,5 @@ pub struct Proyectos {
     pub gn_id: i32,
     pub gn_usr_id: i32,
     pub dir_imagenes: String,
+    pub tenant_id: Option<Uuid>,
 }

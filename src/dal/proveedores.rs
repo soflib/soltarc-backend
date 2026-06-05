@@ -13,13 +13,14 @@ use crate::domain::models::lookup::LookupItem;
 use crate::domain::models::proveedores::Proveedores;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 // ─────────────────────────────────────────────
 // ALTA — sp_cpa_ProveedoresAdd
 // ─────────────────────────────────────────────
-pub async fn alta(pool: &PgPool, prov: &Proveedores) -> ReturnCode {
+pub async fn alta(pool: &PgPool, prov: &Proveedores, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_ProveedoresAdd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)"
+        "SELECT arqeth.sp_cpa_ProveedoresAdd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"
     )
     .bind(&prov.nombre)
     .bind(&prov.contacto)
@@ -32,6 +33,7 @@ pub async fn alta(pool: &PgPool, prov: &Proveedores) -> ReturnCode {
     .bind(&prov.comentarios)
     .bind(prov.activo)
     .bind(&prov.rfc)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -46,11 +48,12 @@ pub async fn alta(pool: &PgPool, prov: &Proveedores) -> ReturnCode {
 // BAJA — sp_cpa_ProveedoresDel
 // El SP devuelve (codigo, mensaje, afectado) como ResultSet
 // ─────────────────────────────────────────────
-pub async fn baja(pool: &PgPool, proveedor: i32) -> ReturnCode {
+pub async fn baja(pool: &PgPool, proveedor: i32, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_as::<_, ReturnCode>(
-        "SELECT codigo, mensaje, afectado FROM arqeth.sp_cpa_ProveedoresDel($1)"
+        "SELECT codigo, mensaje, afectado FROM arqeth.sp_cpa_ProveedoresDel($1,$2)"
     )
     .bind(proveedor)
+    .bind(tenant_id)
     .fetch_optional(pool)
     .await;
 
@@ -64,9 +67,9 @@ pub async fn baja(pool: &PgPool, proveedor: i32) -> ReturnCode {
 // ─────────────────────────────────────────────
 // CAMBIO — sp_cpa_ProveedoresUpd
 // ─────────────────────────────────────────────
-pub async fn cambio(pool: &PgPool, prov: &Proveedores) -> ReturnCode {
+pub async fn cambio(pool: &PgPool, prov: &Proveedores, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_ProveedoresUpd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"
+        "SELECT arqeth.sp_cpa_ProveedoresUpd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)"
     )
     .bind(prov.id.unwrap_or(0))  // id es Option<i32> — 0 nunca debería llegar aquí
     .bind(&prov.nombre)
@@ -80,6 +83,7 @@ pub async fn cambio(pool: &PgPool, prov: &Proveedores) -> ReturnCode {
     .bind(&prov.comentarios)
     .bind(prov.activo)
     .bind(&prov.rfc)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -93,11 +97,12 @@ pub async fn cambio(pool: &PgPool, prov: &Proveedores) -> ReturnCode {
 // ─────────────────────────────────────────────
 // CONSULTA — sp_cpa_ProveedoresQry
 // ─────────────────────────────────────────────
-pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<Proveedores>, ReturnCode> {
+pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<Proveedores>, ReturnCode> {
     let result = sqlx::query_as::<_, Proveedores>(
-        "SELECT * FROM arqeth.sp_cpa_ProveedoresQry($1)"
+        "SELECT * FROM arqeth.sp_cpa_ProveedoresQry($1,$2)"
     )
     .bind(id)
+    .bind(tenant_id)
     .fetch_optional(pool)
     .await;
 
@@ -110,11 +115,12 @@ pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<Proveedores>, Ret
 // ─────────────────────────────────────────────
 // CARGA PROVEEDORES — sp_cpa_ProveedoresLstAll
 // ─────────────────────────────────────────────
-pub async fn carga_proveedores(pool: &PgPool, activos: bool) -> Result<Vec<Proveedores>, ReturnCode> {
+pub async fn carga_proveedores(pool: &PgPool, activos: bool, tenant_id: Uuid) -> Result<Vec<Proveedores>, ReturnCode> {
     let result = sqlx::query_as::<_, Proveedores>(
-        "SELECT * FROM arqeth.sp_cpa_ProveedoresLstAll($1)"
+        "SELECT * FROM arqeth.sp_cpa_ProveedoresLstAll($1,$2)"
     )
     .bind(activos)
+    .bind(tenant_id)
     .fetch_all(pool)
     .await;
 
@@ -128,12 +134,27 @@ pub async fn carga_proveedores(pool: &PgPool, activos: bool) -> Result<Vec<Prove
 // ─────────────────────────────────────────────
 // LOOKUP — sp_cpa_proveedores_lookup
 // ─────────────────────────────────────────────
-pub async fn lookup(pool: &PgPool, q: &str, limit: i32) -> Result<Vec<LookupItem>, ReturnCode> {
+// ─────────────────────────────────────────────
+// SEED por tenant — sp_cpa_proveedores_seed
+// Idempotente: re-llamarlo para el mismo tenant no duplica filas.
+// ─────────────────────────────────────────────
+pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid) -> Result<i32, sqlx::Error> {
+    sqlx::query_scalar::<_, i32>("SELECT arqeth.sp_cpa_proveedores_seed($1)")
+        .bind(tenant_id)
+        .fetch_one(pool)
+        .await
+}
+
+// ─────────────────────────────────────────────
+// LOOKUP — sp_cpa_proveedores_lookup
+// ─────────────────────────────────────────────
+pub async fn lookup(pool: &PgPool, q: &str, limit: i32, tenant_id: Uuid) -> Result<Vec<LookupItem>, ReturnCode> {
     let result = sqlx::query_as::<_, LookupItem>(
-        "SELECT id, etiqueta FROM arqeth.sp_cpa_proveedores_lookup($1, $2)"
+        "SELECT id, etiqueta FROM arqeth.sp_cpa_proveedores_lookup($1, $2, $3)"
     )
     .bind(q)
     .bind(limit)
+    .bind(tenant_id)
     .fetch_all(pool)
     .await;
 

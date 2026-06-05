@@ -19,18 +19,20 @@
 use crate::domain::models::unidades::Unidades;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 // ─────────────────────────────────────────────
 // ALTA — ppto_sp_Unidades_Add
 // ─────────────────────────────────────────────
-pub async fn alta(pool: &PgPool, uni: &Unidades) -> ReturnCode {
+pub async fn alta(pool: &PgPool, uni: &Unidades, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_Unidades_Add($1, $2, $3, $4)"
+        "SELECT arqeth.ppto_sp_Unidades_Add($1, $2, $3, $4, $5)"
     )
     .bind(uni.tipo)
     .bind(&uni.descripcion)
     .bind(&uni.nombre_corto)
     .bind(uni.activa)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -44,11 +46,12 @@ pub async fn alta(pool: &PgPool, uni: &Unidades) -> ReturnCode {
 // ─────────────────────────────────────────────
 // BAJA — ppto_sp_Unidades_DEL
 // ─────────────────────────────────────────────
-pub async fn baja(pool: &PgPool, id: i32) -> ReturnCode {
+pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_Unidades_DEL($1)"
+        "SELECT arqeth.ppto_sp_Unidades_DEL($1, $2)"
     )
     .bind(id)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -62,15 +65,16 @@ pub async fn baja(pool: &PgPool, id: i32) -> ReturnCode {
 // ─────────────────────────────────────────────
 // CAMBIO — ppto_sp_Unidades_UPD
 // ─────────────────────────────────────────────
-pub async fn cambio(pool: &PgPool, uni: &Unidades) -> ReturnCode {
+pub async fn cambio(pool: &PgPool, uni: &Unidades, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_Unidades_UPD($1, $2, $3, $4, $5)"
+        "SELECT arqeth.ppto_sp_Unidades_UPD($1, $2, $3, $4, $5, $6)"
     )
     .bind(uni.id.unwrap_or(0))  // id es Option<i32> — 0 nunca debería llegar aquí
     .bind(uni.tipo)
     .bind(&uni.descripcion)
     .bind(&uni.nombre_corto)
     .bind(uni.activa)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -84,11 +88,12 @@ pub async fn cambio(pool: &PgPool, uni: &Unidades) -> ReturnCode {
 // ─────────────────────────────────────────────
 // CONSULTA — ppto_sp_Unidades_QRY
 // ─────────────────────────────────────────────
-pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<Unidades>, ReturnCode> {
+pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<Unidades>, ReturnCode> {
     let result = sqlx::query_as::<_, Unidades>(
-        "SELECT * FROM arqeth.ppto_sp_Unidades_QRY($1)"
+        "SELECT * FROM arqeth.ppto_sp_Unidades_QRY($1, $2)"
     )
     .bind(id)
+    .bind(tenant_id)
     .fetch_optional(pool)
     .await;
 
@@ -104,10 +109,11 @@ pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<Unidades>, Return
 // Si se necesita el label "TipoUnidad - NombreCorto", el caller
 // debe obtener la configuración y ensamblar el texto.
 // ─────────────────────────────────────────────
-pub async fn obtiene_unidades(pool: &PgPool) -> Result<Vec<Unidades>, ReturnCode> {
+pub async fn obtiene_unidades(pool: &PgPool, tenant_id: Uuid) -> Result<Vec<Unidades>, ReturnCode> {
     let result = sqlx::query_as::<_, Unidades>(
-        "SELECT * FROM arqeth.ppto_sp_Unidades_LSTACT()"
+        "SELECT * FROM arqeth.ppto_sp_Unidades_LSTACT($1)"
     )
+    .bind(tenant_id)
     .fetch_all(pool)
     .await;
 
