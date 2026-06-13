@@ -22,6 +22,7 @@ use crate::api::handlers::catalog_g::providers;
 use crate::api::handlers::catalog_g::quick_access;
 use crate::api::handlers::clients as portal;
 use crate::api::handlers::clients::project_images as han_proj_img;
+use crate::api::handlers::operaciones::archivos as han_archivos;
 use crate::api::handlers::operaciones::proyectos as han_proy;
 use crate::api::handlers::operaciones::detalle_proyecto as han_det_proy;
 use crate::api::handlers::operaciones::xref as han_xref;
@@ -37,7 +38,7 @@ use crate::api::handlers::finanzas::{
 };
 
 use crate::domain::models::catalog_g::CatalogGInput;
-use crate::api::handlers::operaciones::proyectos::{ProyectosInput, GpoUsrInput};
+use crate::api::handlers::operaciones::proyectos::{ProyectosInput, AsignacionInput, AsignacionesInput};
 use crate::api::handlers::operaciones::detalle_proyecto::{DetalleProyectosInput, ActualizaFechasInput, CopiaPartidaInput};
 use crate::api::handlers::operaciones::xref::XrefInput;
 use crate::api::handlers::catalog_g::clients::ClienteInput;
@@ -116,6 +117,7 @@ use crate::api::handlers::sistema::seguridad as han_seguridad;
         crate::api::handlers::auth::identity::login,
         crate::api::handlers::auth::identity::logout,
         crate::api::handlers::auth::identity::me,
+        crate::api::handlers::auth::identity::upgrade_plan,
         crate::api::handlers::auth::tokens::refresh_token,
         crate::api::handlers::auth::tokens::validate_token,
         crate::api::handlers::auth::sessions::revoke_sessions,
@@ -163,15 +165,22 @@ use crate::api::handlers::sistema::seguridad as han_seguridad;
         crate::api::handlers::operaciones::proyectos::lista_grupos,
         crate::api::handlers::operaciones::proyectos::usuarios_grupo,
         crate::api::handlers::operaciones::proyectos::alta,
+        crate::api::handlers::operaciones::proyectos::cupo,
         crate::api::handlers::operaciones::proyectos::baja,
         crate::api::handlers::operaciones::proyectos::cambio,
         crate::api::handlers::operaciones::proyectos::consulta,
         crate::api::handlers::operaciones::proyectos::lista,
         crate::api::handlers::operaciones::proyectos::gpo_usr_proy,
+        crate::api::handlers::operaciones::proyectos::get_asignaciones,
         crate::api::handlers::operaciones::proyectos::cliente_proy,
         crate::api::handlers::operaciones::proyectos::dir_proy,
         crate::api::handlers::operaciones::proyectos::total_ppto,
         crate::api::handlers::operaciones::proyectos::lookup,
+        crate::api::handlers::operaciones::archivos::subir,
+        crate::api::handlers::operaciones::archivos::listar,
+        crate::api::handlers::operaciones::archivos::borrar,
+        crate::api::handlers::operaciones::archivos::uso,
+        crate::api::handlers::operaciones::archivos::soporte,
         // XRef
         crate::api::handlers::operaciones::xref::alta,
         crate::api::handlers::operaciones::xref::baja,
@@ -299,6 +308,7 @@ use crate::api::handlers::sistema::seguridad as han_seguridad;
         AccesosRapidosInput,
         // Auth
         identity::RegisterInput,
+        identity::UpgradePlanInput,
         identity::LoginInput,
         identity::LogoutInput,
         tokens::RefreshInput,
@@ -318,7 +328,8 @@ use crate::api::handlers::sistema::seguridad as han_seguridad;
         han_sdo::SaldosBancosInput,
         han_fin_rep::DistribuyeInput,
         ProyectosInput,
-        GpoUsrInput,
+        AsignacionInput,
+        AsignacionesInput,
         DetalleProyectosInput,
         ActualizaFechasInput,
         CopiaPartidaInput,
@@ -363,8 +374,12 @@ use crate::api::handlers::sistema::seguridad as han_seguridad;
 )]
 struct ApiDoc;
 
-pub fn build_router(postgres: PgPool, auth_grpc: AuthGrpcClient) -> Router {
-    let state = AppState { postgres, auth_grpc };
+pub fn build_router(
+    postgres: PgPool,
+    auth_grpc: AuthGrpcClient,
+    storage: Option<std::sync::Arc<crate::infrastructure::storage::contabo::ContaboStorage>>,
+) -> Router {
+    let state = AppState { postgres, auth_grpc, storage };
 
     // ── Public ─────────────────────────────────────────────────────────────────
     let base = Router::new()
@@ -380,9 +395,16 @@ pub fn build_router(postgres: PgPool, auth_grpc: AuthGrpcClient) -> Router {
     // AI chat and client portal are also open to any authenticated user.
     let han_auth_any = Router::new()
         .route("/auth/me",              get(identity::me))
+        .route("/auth/plan/upgrade",    post(identity::upgrade_plan))
         .route("/auth/logout",          post(identity::logout))
         .route("/auth/token/validate",  post(tokens::validate_token))
-        .route("/auth/sessions/revoke", post(sessions::revoke_sessions));
+        .route("/auth/sessions/revoke", post(sessions::revoke_sessions))
+        // Reporte de soporte con capturas (5×5MB) → support/ en Contabo.
+        .route(
+            "/sistema/soporte",
+            post(han_archivos::soporte)
+                .layer(axum::extract::DefaultBodyLimit::max(30 * 1024 * 1024)),
+        );
 
     let han_ai = Router::new()
         .route("/ai/chat", post(han_ai_chat::chat));
@@ -394,12 +416,22 @@ pub fn build_router(postgres: PgPool, auth_grpc: AuthGrpcClient) -> Router {
         .route("/clients/portal/projects/{id}/work-progress",    get(portal::work_progress::work_progress))
         .route("/clients/portal/projects/{id}/weekly-plan",      get(portal::weekly_plan::weekly_plan))
         .route("/clients/portal/projects/{id}/expense-detail",   get(portal::expense_detail::expense_detail))
+        .route("/clients/portal/clients",                        get(portal::account_statement::mis_clientes))
         .route("/clients/portal/clients/{id}/account-statement", get(portal::account_statement::account_statement))
         .route("/clients/portal/projects/{id}/tasks",            get(portal::project_tasks::project_tasks))
         .route("/clients/portal/projects/{id}/images",           get(han_proj_img::project_images));
 
+    // Admin | Arquitecto: variables de acceso por grupo/usuario (no Reportes/Finanzas).
     let han_seguridad_routes = Router::new()
-        .route("/sistema/seguridad", get(han_seguridad::carga_variables));
+        .route("/sistema/seguridad", get(han_seguridad::carga_variables))
+        .route_layer(middleware::from_fn(require_arquitecto));
+
+    // Autocompletes read-only (tenant-scoped) que cualquier rol necesita para
+    // armar reportes/filtros. Sin role layer → cualquier usuario autenticado.
+    let han_lookups = Router::new()
+        .route("/operaciones/proyectos/lookup", get(han_proy::lookup))
+        .route("/ppto/presupuestos/lookup",     get(han_presupuesto::lookup))
+        .route("/catalog/clients/lookup",       get(clients::lookup));
 
     // ── Admin only ─────────────────────────────────────────────────────────────
     // User management, tenant management, connection string, password admin.
@@ -543,6 +575,7 @@ pub fn build_router(postgres: PgPool, auth_grpc: AuthGrpcClient) -> Router {
         .route_layer(middleware::from_fn(require_arquitecto));
 
     let han_gn_usuarios_routes = Router::new()
+        .route("/sistema/usuarios/sync", post(han_gn_usuarios::sync))
         .route("/sistema/usuarios",      post(han_gn_usuarios::alta))
         .route("/sistema/usuarios",      get(han_gn_usuarios::obtiene_todo))
         .route("/sistema/usuarios",      put(han_gn_usuarios::cambios))
@@ -551,18 +584,29 @@ pub fn build_router(postgres: PgPool, auth_grpc: AuthGrpcClient) -> Router {
         .route_layer(middleware::from_fn(require_arquitecto));
 
     let han_proyectos = Router::new()
-        .route("/operaciones/proyectos/lookup",             get(han_proy::lookup))
         .route("/operaciones/grupos",                       get(han_proy::lista_grupos))
         .route("/operaciones/grupos/{id}/usuarios",         get(han_proy::usuarios_grupo))
         .route("/operaciones/proyectos",                    post(han_proy::alta))
         .route("/operaciones/proyectos",                    get(han_proy::lista))
         .route("/operaciones/proyectos",                    put(han_proy::cambio))
+        .route("/operaciones/proyectos/cupo",               get(han_proy::cupo))
         .route("/operaciones/proyectos/{id}",               get(han_proy::consulta))
         .route("/operaciones/proyectos/{id}",               delete(han_proy::baja))
         .route("/operaciones/proyectos/{id}/grupo-usuario", put(han_proy::gpo_usr_proy))
+        .route("/operaciones/proyectos/{id}/asignaciones",  get(han_proy::get_asignaciones))
         .route("/operaciones/proyectos/{id}/cliente",       get(han_proy::cliente_proy))
         .route("/operaciones/proyectos/{id}/directorio",    get(han_proy::dir_proy))
         .route("/operaciones/proyectos/{id}/total-ppto",    get(han_proy::total_ppto))
+        // Archivos del proyecto (fotos/videos/PDF → Contabo). El POST acepta
+        // hasta 200MB por archivo → límite de body propio en esta ruta.
+        .route(
+            "/operaciones/proyectos/{id}/archivos",
+            get(han_archivos::listar)
+                .post(han_archivos::subir)
+                .layer(axum::extract::DefaultBodyLimit::max(210 * 1024 * 1024)),
+        )
+        .route("/operaciones/archivos/{id}",                delete(han_archivos::borrar))
+        .route("/operaciones/storage/uso",                  get(han_archivos::uso))
         .route_layer(middleware::from_fn(require_arquitecto));
 
     let han_detalle_proyecto = Router::new()
@@ -628,7 +672,6 @@ pub fn build_router(postgres: PgPool, auth_grpc: AuthGrpcClient) -> Router {
         .route_layer(middleware::from_fn(require_arquitecto));
 
     let han_presupuesto_routes = Router::new()
-        .route("/ppto/presupuestos/lookup", get(han_presupuesto::lookup))
         .route("/ppto/presupuestos",        post(han_presupuesto::alta))
         .route("/ppto/presupuestos",        get(han_presupuesto::carga_pptos))
         .route("/ppto/presupuestos",        put(han_presupuesto::cambio))
@@ -639,7 +682,6 @@ pub fn build_router(postgres: PgPool, auth_grpc: AuthGrpcClient) -> Router {
     // ── Admin | Arquitecto | Finanzas ──────────────────────────────────────────
     // CatCtes (Clients catalog), CatCtosEstim (Estimated Costs).
     let han_clients = Router::new()
-        .route("/catalog/clients/lookup",       get(clients::lookup))
         .route("/catalog/clients/tipos",        get(clients::obtiene_tipos))
         .route("/catalog/clients/{id}/nombre",  get(clients::nombre_cliente))
         .route("/catalog/clients",              post(clients::alta))
@@ -661,6 +703,9 @@ pub fn build_router(postgres: PgPool, auth_grpc: AuthGrpcClient) -> Router {
     // ReprtesPPTO, ReporteProy (budget + project reports).
     // Finanzas included because estado_de_cuenta lives in this group.
     let han_rep_proy_routes = Router::new()
+        .route("/reportes/lookup/proyectos",    get(crate::api::handlers::reportes::lookups::proyectos))
+        .route("/reportes/lookup/clientes",     get(crate::api::handlers::reportes::lookups::clientes))
+        .route("/reportes/lookup/presupuestos", get(crate::api::handlers::reportes::lookups::presupuestos))
         .route("/reportes/proyecto/partidas",      get(han_rep_proy::carga_partidas))
         .route("/reportes/proyecto/arbol",         get(han_rep_proy::arbol_tareas_proyecto))
         .route("/reportes/proyecto/audita-xref",   get(han_rep_proy::audita_xref))
@@ -680,6 +725,7 @@ pub fn build_router(postgres: PgPool, auth_grpc: AuthGrpcClient) -> Router {
         .merge(han_ai)
         .merge(han_client_portal)
         .merge(han_seguridad_routes)
+        .merge(han_lookups)
         // admin only
         .merge(han_auth_admin)
         // admin | finanzas

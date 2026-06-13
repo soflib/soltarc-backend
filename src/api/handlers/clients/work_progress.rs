@@ -34,6 +34,7 @@ pub async fn work_progress(
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /clients/portal/projects/{}/work-progress", id);
+    if let Some(err) = super::ensure_proyecto(&state, &auth_user, id).await { return err; }
 
     let tenant_id = match auth_user.tenant_uuid() {
         Ok(t) => t,
@@ -54,9 +55,10 @@ pub async fn work_progress(
 
     let nombre_cliente = svc::nombre_cliente(&state.postgres, proyecto.cliente, tenant_id).await;
 
-    let (ingresos, egresos) = tokio::join!(
+    let (ingresos, egresos, estados) = tokio::join!(
         svc::ingresos(&state.postgres, id),
         svc::egresos(&state.postgres, id),
+        crate::services::clients::catalogo_map(&state.postgres, crate::services::clients::CAT_ESTADO_PROYECTOS, tenant_id),
     );
 
     let ingresos = match ingresos {
@@ -91,6 +93,7 @@ pub async fn work_progress(
             "fecha_ini":   proyecto.fecha_ini.to_string(),
             "fecha_fin":   proyecto.fecha_fin.to_string(),
             "estado":      proyecto.estado,
+            "estado_nombre": estados.get(&proyecto.estado),
         },
         "ingresos": ingresos.iter().map(|r| json!({
             "fecha":      r.fecha,

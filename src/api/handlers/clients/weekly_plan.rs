@@ -38,11 +38,13 @@ pub struct NivelQuery {
 )]
 pub async fn weekly_plan(
     State(state): State<AppState>,
+    axum::Extension(auth_user): axum::Extension<crate::api::middleware::roles::AuthUser>,
     Path(id): Path<i32>,
     Query(q): Query<NivelQuery>,
 ) -> (StatusCode, Json<Value>) {
     let nivel = q.nivel.unwrap_or(3);
     debug!("GET /clients/portal/projects/{}/weekly-plan nivel={}", id, nivel);
+    if let Some(err) = super::ensure_proyecto(&state, &auth_user, id).await { return err; }
 
     let fechas = match svc::fechas(&state.postgres, id).await {
         Ok(f) => f,

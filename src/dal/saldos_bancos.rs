@@ -16,18 +16,20 @@
 use crate::domain::models::saldos_bancos::SaldosBancos;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 // ─────────────────────────────────────────────
 // ALTA — sp_cpa_SaldosBco_Add
 // ─────────────────────────────────────────────
-pub async fn alta(pool: &PgPool, sdo: &SaldosBancos) -> ReturnCode {
+pub async fn alta(pool: &PgPool, sdo: &SaldosBancos, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_SaldosBco_Add($1, $2, $3, $4)"
+        "SELECT arqeth.sp_cpa_SaldosBco_Add($1, $2, $3, $4, $5)"
     )
     .bind(sdo.banco)
     .bind(sdo.ano)
     .bind(sdo.mes)
     .bind(sdo.monto)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -41,11 +43,12 @@ pub async fn alta(pool: &PgPool, sdo: &SaldosBancos) -> ReturnCode {
 // ─────────────────────────────────────────────
 // BAJA — sp_cpa_SaldosBco_DEL
 // ─────────────────────────────────────────────
-pub async fn baja(pool: &PgPool, id: i32) -> ReturnCode {
+pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_SaldosBco_DEL($1)"
+        "SELECT arqeth.sp_cpa_SaldosBco_DEL($1, $2)"
     )
     .bind(id)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -59,15 +62,16 @@ pub async fn baja(pool: &PgPool, id: i32) -> ReturnCode {
 // ─────────────────────────────────────────────
 // CAMBIOS — sp_cpa_SaldosBco_Upd
 // ─────────────────────────────────────────────
-pub async fn cambios(pool: &PgPool, sdo: &SaldosBancos) -> ReturnCode {
+pub async fn cambios(pool: &PgPool, sdo: &SaldosBancos, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_SaldosBco_Upd($1, $2, $3, $4, $5)"
+        "SELECT arqeth.sp_cpa_SaldosBco_Upd($1, $2, $3, $4, $5, $6)"
     )
     .bind(sdo.id.unwrap_or(0))  // id es Option<i32> — 0 nunca debería llegar aquí
     .bind(sdo.banco)
     .bind(sdo.ano)
     .bind(sdo.mes)
     .bind(sdo.monto)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -81,11 +85,12 @@ pub async fn cambios(pool: &PgPool, sdo: &SaldosBancos) -> ReturnCode {
 // ─────────────────────────────────────────────
 // CONSULTA — sp_cpa_SaldosBco_QRY
 // ─────────────────────────────────────────────
-pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<SaldosBancos>, ReturnCode> {
+pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<SaldosBancos>, ReturnCode> {
     let result = sqlx::query_as::<_, SaldosBancos>(
-        "SELECT * FROM arqeth.sp_cpa_SaldosBco_QRY($1)"
+        "SELECT * FROM arqeth.sp_cpa_SaldosBco_QRY($1, $2)"
     )
     .bind(id)
+    .bind(tenant_id)
     .fetch_optional(pool)
     .await;
 
@@ -98,11 +103,12 @@ pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<SaldosBancos>, Re
 // ─────────────────────────────────────────────
 // SALDOS POR BANCO — sp_cpa_SaldosBco_LSTBco
 // ─────────────────────────────────────────────
-pub async fn saldos_x_banco(pool: &PgPool, banco: i32) -> Result<Vec<SaldosBancos>, ReturnCode> {
+pub async fn saldos_x_banco(pool: &PgPool, banco: i32, tenant_id: Uuid) -> Result<Vec<SaldosBancos>, ReturnCode> {
     let result = sqlx::query_as::<_, SaldosBancos>(
-        "SELECT * FROM arqeth.sp_cpa_SaldosBco_LSTBco($1)"
+        "SELECT * FROM arqeth.sp_cpa_SaldosBco_LSTBco($1, $2)"
     )
     .bind(banco)
+    .bind(tenant_id)
     .fetch_all(pool)
     .await;
 
@@ -116,10 +122,11 @@ pub async fn saldos_x_banco(pool: &PgPool, banco: i32) -> Result<Vec<SaldosBanco
 // ─────────────────────────────────────────────
 // SALDOS TODOS — sp_cpa_SaldosBco_LSTALL
 // ─────────────────────────────────────────────
-pub async fn saldos_todos(pool: &PgPool) -> Result<Vec<SaldosBancos>, ReturnCode> {
+pub async fn saldos_todos(pool: &PgPool, tenant_id: Uuid) -> Result<Vec<SaldosBancos>, ReturnCode> {
     let result = sqlx::query_as::<_, SaldosBancos>(
-        "SELECT * FROM arqeth.sp_cpa_SaldosBco_LSTALL()"
+        "SELECT * FROM arqeth.sp_cpa_SaldosBco_LSTALL($1)"
     )
+    .bind(tenant_id)
     .fetch_all(pool)
     .await;
 
@@ -128,4 +135,15 @@ pub async fn saldos_todos(pool: &PgPool) -> Result<Vec<SaldosBancos>, ReturnCode
         Ok(_)  => Err(ReturnCode { codigo: -61, afectado: 0, mensaje: "No hay saldos".to_string() }),
         Err(e) => Err(ReturnCode { codigo: -65, afectado: 0, mensaje: e.to_string() }),
     }
+}
+
+// ─────────────────────────────────────────────
+// SEED por tenant — sp_cpa_saldosbco_seed
+// Idempotente: re-llamarlo para el mismo tenant no duplica filas.
+// ─────────────────────────────────────────────
+pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid) -> Result<i32, sqlx::Error> {
+    sqlx::query_scalar::<_, i32>("SELECT arqeth.sp_cpa_saldosbco_seed($1)")
+        .bind(tenant_id)
+        .fetch_one(pool)
+        .await
 }

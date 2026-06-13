@@ -12,7 +12,7 @@
 //   GET /reportes/proyecto/avance-obra?proyecto=&format=
 
 use axum::{
-    extract::{Query, State},
+    extract::{Extension, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,
@@ -21,9 +21,40 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tracing::{debug, error, info};
 
+use crate::api::middleware::roles::AuthUser;
 use crate::infrastructure::db::app_state::AppState;
 use crate::infrastructure::render;
 use crate::services::reportes::proyecto as svc;
+
+// ── Acceso por perfil ─────────────────────────────────────────────────────────
+// El usuario solo puede pedir reportes de SUS entidades (Admin/Finanzas=nivel1
+// ven todo; nivel 2 su grupo; nivel 3 lo asignado). Devuelven Some(error 403) si no.
+async fn perfil(
+    state: &AppState,
+    auth_user: &AuthUser,
+) -> Result<(uuid::Uuid, i32, i32, i32), (StatusCode, Json<Value>)> {
+    let t = auth_user.tenant_uuid()?;
+    let (g, u, n) = crate::dal::gn_usuarios::perfil_de_auth(&state.postgres, t, &auth_user.user_id, &auth_user.role).await;
+    Ok((t, g, u, n))
+}
+
+async fn ensure_proyecto(state: &AppState, auth_user: &AuthUser, proyecto: i32) -> Option<(StatusCode, Json<Value>)> {
+    let (t, g, u, n) = match perfil(state, auth_user).await { Ok(p) => p, Err(e) => return Some(e) };
+    if crate::dal::proyectos::proyecto_accesible(&state.postgres, t, g, u, n, proyecto).await { None }
+    else { Some((StatusCode::FORBIDDEN, Json(json!({ "mensaje": "No tienes acceso a este proyecto." })))) }
+}
+
+async fn ensure_presupuesto(state: &AppState, auth_user: &AuthUser, presupuesto: i32) -> Option<(StatusCode, Json<Value>)> {
+    let (t, g, u, n) = match perfil(state, auth_user).await { Ok(p) => p, Err(e) => return Some(e) };
+    if crate::dal::presupuesto::presupuesto_accesible(&state.postgres, t, g, u, n, presupuesto).await { None }
+    else { Some((StatusCode::FORBIDDEN, Json(json!({ "mensaje": "No tienes acceso a este presupuesto." })))) }
+}
+
+async fn ensure_cliente(state: &AppState, auth_user: &AuthUser, cliente: i32) -> Option<(StatusCode, Json<Value>)> {
+    let (t, g, u, n) = match perfil(state, auth_user).await { Ok(p) => p, Err(e) => return Some(e) };
+    if crate::dal::clientes::cliente_accesible(&state.postgres, t, g, u, n, cliente).await { None }
+    else { Some((StatusCode::FORBIDDEN, Json(json!({ "mensaje": "No tienes acceso a este cliente." })))) }
+}
 
 #[derive(Debug, Deserialize)]
 pub struct PresupuestoQuery {
@@ -60,9 +91,11 @@ pub struct IdQuery {
 )]
 pub async fn carga_partidas(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<PresupuestoQuery>,
 ) -> Response {
     debug!(presupuesto = q.presupuesto, "GET /reportes/proyecto/partidas");
+    if let Some(err) = ensure_presupuesto(&state, &auth_user, q.presupuesto).await { return err.into_response(); }
 
     match svc::carga_partidas(&state.postgres, q.presupuesto).await {
         Ok(lista) => {
@@ -118,9 +151,11 @@ pub async fn carga_partidas(
 )]
 pub async fn arbol_tareas_proyecto(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<ProyectoQuery>,
 ) -> Response {
     debug!(proyecto = q.proyecto, "GET /reportes/proyecto/arbol");
+    if let Some(err) = ensure_proyecto(&state, &auth_user, q.proyecto).await { return err.into_response(); }
 
     match svc::arbol_tareas_proyecto(&state.postgres, q.proyecto).await {
         Ok(lista) => {
@@ -170,9 +205,11 @@ pub async fn arbol_tareas_proyecto(
 )]
 pub async fn audita_xref(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<PresupuestoQuery>,
 ) -> Response {
     debug!(presupuesto = q.presupuesto, "GET /reportes/proyecto/audita-xref");
+    if let Some(err) = ensure_presupuesto(&state, &auth_user, q.presupuesto).await { return err.into_response(); }
 
     match svc::audita_xref(&state.postgres, q.presupuesto).await {
         Ok(lista) => {
@@ -221,9 +258,11 @@ pub async fn audita_xref(
 )]
 pub async fn totales_ppto(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<PresupuestoQuery>,
 ) -> (StatusCode, Json<Value>) {
     debug!(presupuesto = q.presupuesto, "GET /reportes/proyecto/totales-ppto");
+    if let Some(err) = ensure_presupuesto(&state, &auth_user, q.presupuesto).await { return err; }
 
     match svc::totales_ppto(&state.postgres, q.presupuesto).await {
         Ok(total) => {
@@ -257,9 +296,11 @@ pub async fn totales_ppto(
 )]
 pub async fn ingresos(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<ProyectoQuery>,
 ) -> (StatusCode, Json<Value>) {
     debug!(proyecto = q.proyecto, "GET /reportes/proyecto/ingresos");
+    if let Some(err) = ensure_proyecto(&state, &auth_user, q.proyecto).await { return err; }
 
     match svc::ingresos(&state.postgres, q.proyecto).await {
         Ok(lista) => {
@@ -302,9 +343,11 @@ pub async fn ingresos(
 )]
 pub async fn egresos(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<ProyectoQuery>,
 ) -> (StatusCode, Json<Value>) {
     debug!(proyecto = q.proyecto, "GET /reportes/proyecto/egresos");
+    if let Some(err) = ensure_proyecto(&state, &auth_user, q.proyecto).await { return err; }
 
     match svc::egresos(&state.postgres, q.proyecto).await {
         Ok(lista) => {
@@ -347,9 +390,11 @@ pub async fn egresos(
 )]
 pub async fn estado_de_cuenta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<IdQuery>,
 ) -> (StatusCode, Json<Value>) {
     debug!(id = q.id, "GET /reportes/proyecto/estado-cuenta");
+    if let Some(err) = ensure_cliente(&state, &auth_user, q.id).await { return err; }
 
     match svc::estado_de_cuenta(&state.postgres, q.id).await {
         Ok(lista) => {
@@ -393,9 +438,11 @@ pub async fn estado_de_cuenta(
 )]
 pub async fn avance_obra(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<ProyectoQuery>,
 ) -> Response {
     debug!(proyecto = q.proyecto, "GET /reportes/proyecto/avance-obra");
+    if let Some(err) = ensure_proyecto(&state, &auth_user, q.proyecto).await { return err.into_response(); }
 
     let ing_result = svc::ingresos(&state.postgres, q.proyecto).await;
     let egr_result = svc::egresos(&state.postgres, q.proyecto).await;

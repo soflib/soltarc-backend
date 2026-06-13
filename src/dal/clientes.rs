@@ -179,3 +179,95 @@ pub async fn lookup(pool: &PgPool, q: &str, limit: i32, tenant_id: Uuid) -> Resu
         Err(e)    => Err(ReturnCode { codigo: -55, afectado: 0, mensaje: e.to_string() }),
     }
 }
+
+// ─────────────────────────────────────────────
+// CLIENTES ACCESIBLES (portal) — clientes de los proyectos que el usuario ve
+// según su perfil (nivel 1=todos / 2=su grupo>0 / 3=asignados>0). Runtime query
+// (sin SP) para no requerir reaplicar la BD.
+// ─────────────────────────────────────────────
+pub async fn clientes_accesibles(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    grupo: i32,
+    gn_usr_id: i32,
+    nivel: i32,
+) -> Vec<LookupItem> {
+    sqlx::query_as::<_, LookupItem>(
+        r#"SELECT DISTINCT c.id, c.nombre AS etiqueta
+           FROM arqeth.cpa_proyectos p
+           JOIN arqeth.cpa_clientes  c ON c.id = p.cliente
+           WHERE p.tenant_id = $1 AND p.activo = TRUE
+             AND ( $4 = 1
+                   OR ($4 = 2  AND $2 > 0 AND EXISTS (
+                         SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                         WHERE a.proyecto_id = p.id AND a.gn_id = $2))
+                   OR ($4 >= 3 AND $3 > 0 AND EXISTS (
+                         SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                         WHERE a.proyecto_id = p.id AND a.gn_usr_id = $3)) )
+           ORDER BY c.nombre"#,
+    )
+    .bind(tenant_id)
+    .bind(grupo)
+    .bind(gn_usr_id)
+    .bind(nivel)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default()
+}
+
+// ¿El usuario puede ver el estado de cuenta de este cliente? (nivel 1 = sí).
+pub async fn cliente_accesible(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    grupo: i32,
+    gn_usr_id: i32,
+    nivel: i32,
+    cliente: i32,
+) -> bool {
+    if nivel <= 1 {
+        return true;
+    }
+    sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM arqeth.cpa_proyectos p
+            WHERE p.tenant_id = $1 AND p.activo = TRUE AND p.cliente = $5
+              AND ( ($4 = 2  AND $2 > 0 AND EXISTS (
+                        SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                        WHERE a.proyecto_id = p.id AND a.gn_id = $2))
+                    OR ($4 >= 3 AND $3 > 0 AND EXISTS (
+                        SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                        WHERE a.proyecto_id = p.id AND a.gn_usr_id = $3)) ) )"#,
+    )
+    .bind(tenant_id)
+    .bind(grupo)
+    .bind(gn_usr_id)
+    .bind(nivel)
+    .bind(cliente)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(false)
+}
+
+// Autocomplete de clientes VISIBLES (de los proyectos del usuario) + texto `q`.
+pub async fn lookup_accesibles(
+    pool: &PgPool, tenant_id: Uuid, grupo: i32, gn_usr_id: i32, nivel: i32, q: &str, limit: i32,
+) -> Vec<LookupItem> {
+    sqlx::query_as::<_, LookupItem>(
+        r#"SELECT DISTINCT c.id, c.nombre AS etiqueta
+           FROM arqeth.cpa_proyectos p
+           JOIN arqeth.cpa_clientes  c ON c.id = p.cliente
+           WHERE p.tenant_id = $1 AND p.activo = TRUE
+             AND ( $4 = 1
+                   OR ($4 = 2  AND $2 > 0 AND EXISTS (
+                         SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                         WHERE a.proyecto_id = p.id AND a.gn_id = $2))
+                   OR ($4 >= 3 AND $3 > 0 AND EXISTS (
+                         SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                         WHERE a.proyecto_id = p.id AND a.gn_usr_id = $3)) )
+             AND ($5 = '' OR c.nombre ILIKE '%' || $5 || '%')
+           ORDER BY c.nombre
+           LIMIT $6"#,
+    )
+    .bind(tenant_id).bind(grupo).bind(gn_usr_id).bind(nivel).bind(q).bind(limit)
+    .fetch_all(pool).await.unwrap_or_default()
+}

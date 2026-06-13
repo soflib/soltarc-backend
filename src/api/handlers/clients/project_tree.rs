@@ -29,20 +29,33 @@ use crate::services::clients::project_tree as svc;
 )]
 pub async fn arbol_tareas(
     State(state): State<AppState>,
+    axum::Extension(auth_user): axum::Extension<crate::api::middleware::roles::AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /clients/portal/projects/{}/tree", id);
+    if let Some(err) = super::ensure_proyecto(&state, &auth_user, id).await { return err; }
 
-    match svc::arbol_tareas(&state.postgres, id).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    let (lista_res, estados) = tokio::join!(
+        svc::arbol_tareas(&state.postgres, id),
+        crate::services::clients::catalogo_map(&state.postgres, crate::services::clients::CAT_ESTADO_PARTIDAS, tenant_id),
+    );
+
+    match lista_res {
         Ok(lista) => {
             info!("GET /clients/portal/projects/{}/tree ← 200 {} nodos", id, lista.len());
             (StatusCode::OK, Json(json!(lista.iter().map(|p| json!({
-                "nodo":        p.nodo,
-                "nivel":       p.nivel,
-                "descripcion": p.descripcion,
-                "estado":      p.estado,
-                "proyecto":    p.proyecto,
-                "importe":     p.importe.as_ref().map(|d| d.to_string()),
+                "nodo":          p.nodo,
+                "nivel":         p.nivel,
+                "descripcion":   p.descripcion,
+                "estado":        p.estado,
+                "estado_nombre": p.estado.and_then(|e| estados.get(&e)),
+                "proyecto":      p.proyecto,
+                "importe":       p.importe.as_ref().map(|d| d.to_string()),
             })).collect::<Vec<_>>())))
         }
         Err(ret) if ret.codigo < -50 => {

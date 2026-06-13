@@ -12,6 +12,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
+    Extension,
     Json,
 };
 use serde::Deserialize;
@@ -20,6 +21,7 @@ use time::macros::format_description;
 use tracing::{debug, error, info};
 use utoipa::ToSchema;
 
+use crate::api::middleware::roles::AuthUser;
 use crate::infrastructure::db::app_state::AppState;
 use crate::infrastructure::render;
 use crate::services::finanzas::finanzas_reports as svc;
@@ -297,12 +299,18 @@ pub async fn ingresos_detalle(
 )]
 pub async fn recibo_honorarios(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
     Query(q): Query<TipoQuery>,
 ) -> Response {
     debug!("GET /finanzas/recibo-honorarios/{} tipo={}", id, q.tipo);
 
-    match svc::recibo_honorarios(&state.postgres, id, &q.tipo).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e.into_response(),
+    };
+
+    match svc::recibo_honorarios(&state.postgres, id, &q.tipo, tenant_id).await {
         Ok(r) => {
             info!("GET /finanzas/recibo-honorarios/{} ← 200 OK", id);
             let data = json!({

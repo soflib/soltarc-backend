@@ -10,10 +10,13 @@
 //   GET /reportes/financieros/egresos?fecha_ini=&fecha_fin=[&format=xlsx]
 //   GET /reportes/financieros/egresos-gral?banco=&fecha_ini=&fecha_fin=[&format=xlsx]
 
+use std::collections::HashMap;
+
 use axum::{
     extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
+    Extension,
     Json,
 };
 use serde::Deserialize;
@@ -21,6 +24,8 @@ use serde_json::{json, Value};
 use time::macros::format_description;
 use tracing::{debug, error, info};
 
+use crate::api::middleware::roles::AuthUser;
+use crate::generated::auth::GetAllUsersRequest;
 use crate::infrastructure::db::app_state::AppState;
 use crate::infrastructure::render;
 use crate::services::reportes::financieros as svc;
@@ -28,6 +33,40 @@ use crate::services::reportes::financieros as svc;
 fn parse_date(s: &str) -> Result<time::Date, String> {
     let fmt = format_description!("[year]-[month]-[day]");
     time::Date::parse(s, &fmt).map_err(|e| format!("fecha inválida '{}': {}", s, e))
+}
+
+const UUID_ZERO: &str = "00000000-0000-0000-0000-000000000000";
+
+// Mapa user_id (UUID) → nombre legible, vía el servicio de auth (gRPC).
+// El nombre del usuario vive en security_db (otra BD), por eso NO se puede
+// resolver con un JOIN en el SP; se resuelve aquí. Si el gRPC falla, devuelve
+// un mapa vacío y los reportes muestran el UUID crudo (degradación suave).
+async fn mapa_usuarios(state: &AppState, tenant_id: &str) -> HashMap<String, String> {
+    if tenant_id.is_empty() {
+        return HashMap::new();
+    }
+    let mut client = state.auth_grpc.clone();
+    let req = GetAllUsersRequest { limit: 1000, offset: 0, tenant_id: tenant_id.to_string() };
+    match client.get_all_users(req).await {
+        Ok(r) => r.users.into_iter().map(|u| {
+            let nombre = if !u.full_name.trim().is_empty() { u.full_name }
+                         else if !u.username.trim().is_empty() { u.username }
+                         else { u.email };
+            (u.user_id, nombre)
+        }).collect(),
+        Err(_) => HashMap::new(),
+    }
+}
+
+// Resuelve el UUID del usuario a un nombre legible. El UUID cero (datos de
+// ejemplo / sistema) se muestra como "Sistema"; un UUID desconocido cae al
+// propio UUID para no perder información.
+fn resolver_usuario(uuid: Option<&str>, mapa: &HashMap<String, String>) -> String {
+    match uuid {
+        None => String::new(),
+        Some(u) if u.is_empty() || u == UUID_ZERO => "Sistema".to_string(),
+        Some(u) => mapa.get(u).cloned().unwrap_or_else(|| u.to_string()),
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -73,6 +112,7 @@ pub struct BancoFechasQuery {
 )]
 pub async fn captura_diaria(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<FechasQuery>,
 ) -> Response {
     debug!("GET /reportes/financieros/captura-diaria");
@@ -89,6 +129,8 @@ pub async fn captura_diaria(
     match svc::captura_diaria(&state.postgres, fecha_ini, fecha_fin).await {
         Ok(lista) => {
             info!("GET /reportes/financieros/captura-diaria ← 200 {} registros", lista.len());
+            // Resuelve los UUID de usuario a nombres legibles (gRPC auth).
+            let usuarios = mapa_usuarios(&state, &auth_user.tenant_id).await;
             let items: Vec<Value> = lista.iter().map(|r| json!({
                 "tipo":       r.tipo,
                 "fecha":      r.fecha.map(|d| d.to_string()),
@@ -97,7 +139,7 @@ pub async fn captura_diaria(
                 "referencia": r.referencia,
                 "concepto":   r.concepto,
                 "monto":      r.monto.map(|m| m.to_string()),
-                "usuario":    r.usuario,
+                "usuario":    resolver_usuario(r.usuario.as_deref(), &usuarios),
                 "proyecto":   r.proyecto,
             })).collect();
 

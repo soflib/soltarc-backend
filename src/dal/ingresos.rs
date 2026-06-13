@@ -14,13 +14,14 @@ use crate::domain::models::ingresos::{IngresoConTotal, Ingresos, IngresosFilter}
 use crate::domain::models::lookup::PageOf;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 // ─────────────────────────────────────────────
 // ALTA — sp_cpa_IngresosAdd
 // ─────────────────────────────────────────────
-pub async fn alta(pool: &PgPool, ing: &Ingresos) -> ReturnCode {
+pub async fn alta(pool: &PgPool, ing: &Ingresos, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_IngresosAdd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)"
+        "SELECT arqeth.sp_cpa_IngresosAdd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"
     )
     .bind(ing.fecha)          // $1  p_fecha
     .bind(ing.banco)          // $2  p_banco
@@ -33,6 +34,7 @@ pub async fn alta(pool: &PgPool, ing: &Ingresos) -> ReturnCode {
     .bind(ing.fecha_aplica)   // $9  p_fecha_aplica
     .bind(ing.cliente)        // $10 p_cliente
     .bind(ing.usuario_ms)     // $11 p_usuario_ms
+    .bind(tenant_id)          // $12 p_tenant_id
     .fetch_one(pool)
     .await;
 
@@ -47,11 +49,12 @@ pub async fn alta(pool: &PgPool, ing: &Ingresos) -> ReturnCode {
 // BAJA — sp_cpa_IngresosDel
 // El SP devuelve (codigo, mensaje, afectado) como ResultSet
 // ─────────────────────────────────────────────
-pub async fn baja(pool: &PgPool, ingreso: i32) -> ReturnCode {
+pub async fn baja(pool: &PgPool, ingreso: i32, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_as::<_, ReturnCode>(
-        "SELECT codigo, mensaje, afectado FROM arqeth.sp_cpa_IngresosDel($1)"
+        "SELECT codigo, mensaje, afectado FROM arqeth.sp_cpa_IngresosDel($1, $2)"
     )
     .bind(ingreso)
+    .bind(tenant_id)
     .fetch_optional(pool)
     .await;
 
@@ -65,9 +68,9 @@ pub async fn baja(pool: &PgPool, ingreso: i32) -> ReturnCode {
 // ─────────────────────────────────────────────
 // CAMBIOS — sp_cpa_IngresosUpd
 // ─────────────────────────────────────────────
-pub async fn cambios(pool: &PgPool, ing: &Ingresos) -> ReturnCode {
+pub async fn cambios(pool: &PgPool, ing: &Ingresos, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_IngresosUpd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"
+        "SELECT arqeth.sp_cpa_IngresosUpd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)"
     )
     .bind(ing.id.unwrap_or(0))  // $1  p_id
     .bind(ing.fecha)            // $2  p_fecha
@@ -81,6 +84,7 @@ pub async fn cambios(pool: &PgPool, ing: &Ingresos) -> ReturnCode {
     .bind(ing.fecha_aplica)     // $10 p_fecha_aplica
     .bind(ing.cliente)          // $11 p_cliente
     .bind(ing.usuario_ms)       // $12 p_usuario_ms
+    .bind(tenant_id)            // $13 p_tenant_id
     .fetch_one(pool)
     .await;
 
@@ -94,11 +98,12 @@ pub async fn cambios(pool: &PgPool, ing: &Ingresos) -> ReturnCode {
 // ─────────────────────────────────────────────
 // CONSULTA — sp_cpa_IngresosQry
 // ─────────────────────────────────────────────
-pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<Ingresos>, ReturnCode> {
+pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<Ingresos>, ReturnCode> {
     let result = sqlx::query_as::<_, Ingresos>(
-        "SELECT * FROM arqeth.sp_cpa_IngresosQry($1)"
+        "SELECT * FROM arqeth.sp_cpa_IngresosQry($1, $2)"
     )
     .bind(id)
+    .bind(tenant_id)
     .fetch_optional(pool)
     .await;
 
@@ -112,12 +117,13 @@ pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<Ingresos>, Return
 // LISTA — sp_cpa_ingresos_lstact
 // Filtros opcionales por proyecto y/o cliente (None = sin filtro).
 // ─────────────────────────────────────────────
-pub async fn lista(pool: &PgPool, proyecto: Option<i32>, cliente: Option<i32>) -> Result<Vec<Ingresos>, ReturnCode> {
+pub async fn lista(pool: &PgPool, proyecto: Option<i32>, cliente: Option<i32>, tenant_id: Uuid) -> Result<Vec<Ingresos>, ReturnCode> {
     let result = sqlx::query_as::<_, Ingresos>(
-        "SELECT * FROM arqeth.sp_cpa_ingresos_lstact($1, $2)"
+        "SELECT * FROM arqeth.sp_cpa_ingresos_lstact($1, $2, $3)"
     )
     .bind(proyecto)
     .bind(cliente)
+    .bind(tenant_id)
     .fetch_all(pool)
     .await;
 
@@ -132,9 +138,9 @@ pub async fn lista(pool: &PgPool, proyecto: Option<i32>, cliente: Option<i32>) -
 // Filtros + ILIKE en referencia/comentario/cliente/proyecto + paginación.
 // El SP devuelve total_count en cada fila para evitar un segundo viaje.
 // ─────────────────────────────────────────────
-pub async fn search(pool: &PgPool, f: &IngresosFilter) -> Result<PageOf<Ingresos>, ReturnCode> {
+pub async fn search(pool: &PgPool, f: &IngresosFilter, tenant_id: Uuid) -> Result<PageOf<Ingresos>, ReturnCode> {
     let rows = sqlx::query_as::<_, IngresoConTotal>(
-        "SELECT * FROM arqeth.sp_cpa_ingresos_search($1, $2, $3, $4, $5, $6, $7)"
+        "SELECT * FROM arqeth.sp_cpa_ingresos_search($1, $2, $3, $4, $5, $6, $7, $8)"
     )
     .bind(f.proyecto)
     .bind(f.cliente)
@@ -143,6 +149,7 @@ pub async fn search(pool: &PgPool, f: &IngresosFilter) -> Result<PageOf<Ingresos
     .bind(f.q.as_deref())
     .bind(f.offset)
     .bind(f.limit)
+    .bind(tenant_id)
     .fetch_all(pool)
     .await;
 
@@ -156,4 +163,16 @@ pub async fn search(pool: &PgPool, f: &IngresosFilter) -> Result<PageOf<Ingresos
         }
         Err(e) => Err(ReturnCode { codigo: -65, afectado: 0, mensaje: e.to_string() }),
     }
+}
+
+// ─────────────────────────────────────────────
+// SEED por tenant — sp_cpa_ingresos_seed
+// Idempotente: re-llamarlo para el mismo tenant no duplica filas.
+// ─────────────────────────────────────────────
+pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid, usuario: Uuid) -> Result<i32, sqlx::Error> {
+    sqlx::query_scalar::<_, i32>("SELECT arqeth.sp_cpa_ingresos_seed($1, $2)")
+        .bind(tenant_id)
+        .bind(usuario)
+        .fetch_one(pool)
+        .await
 }

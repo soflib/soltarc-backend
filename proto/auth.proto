@@ -219,6 +219,8 @@ message UpdateUserRequest {
     string phone     = 3;
     string role      = 4;
     string status    = 5;
+    string email     = 6;   // vacío = no cambiar
+    string username  = 7;   // vacío = no cambiar
 }
 
 message LockUserRequest {

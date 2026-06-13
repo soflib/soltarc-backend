@@ -77,6 +77,23 @@ async fn main() {
             .expect("failed to connect to security-core gRPC (insecure)")
     };
 
+    // ── Object storage (Contabo). Opcional: si faltan env vars el server
+    //    arranca igual y los endpoints de archivos responden 503. ───────────
+    let storage = match infrastructure::storage::contabo::ContaboStorage::from_env() {
+        Ok(s) => {
+            if let Err(e) = s.ensure_bucket().await {
+                tracing::warn!(error = %e, "contabo: ensure_bucket falló (se continúa; uploads pueden fallar)");
+            } else {
+                tracing::info!("contabo object storage listo");
+            }
+            Some(std::sync::Arc::new(s))
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "contabo no configurado — endpoints de archivos deshabilitados (503)");
+            None
+        }
+    };
+
     let allowed_origins = [
         "http://localhost:3001".parse::<HeaderValue>().unwrap(),
         "http://localhost:3000".parse::<HeaderValue>().unwrap(),
@@ -96,7 +113,7 @@ async fn main() {
         ])
         .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE]);
 
-    let app = build_router(postgres, auth_client).layer(cors);
+    let app = build_router(postgres, auth_client, storage).layer(cors);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:2009")
         .await

@@ -9,6 +9,7 @@
 use axum::{
     extract::{Path, State},
     http::StatusCode,
+    Extension,
     Json,
 };
 use rust_decimal::Decimal;
@@ -17,6 +18,7 @@ use serde_json::{json, Value};
 use utoipa::ToSchema;
 use tracing::{debug, error, info};
 
+use crate::api::middleware::roles::AuthUser;
 use crate::domain::models::saldos_bancos::SaldosBancos;
 use crate::infrastructure::db::app_state::AppState;
 use crate::services::finanzas::saldos_bancos as svc;
@@ -68,9 +70,15 @@ fn saldo_json(s: &SaldosBancos) -> Value {
 )]
 pub async fn alta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<SaldosBancosInput>,
 ) -> (StatusCode, Json<Value>) {
     debug!(banco = body.banco, ano = body.ano, mes = body.mes, "POST /finanzas/saldos");
+
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
 
     let sdo = match parse_input(body) {
         Ok(s)    => s,
@@ -80,7 +88,7 @@ pub async fn alta(
         }
     };
 
-    let ret = svc::alta(&state.postgres, &sdo).await;
+    let ret = svc::alta(&state.postgres, &sdo, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("POST /finanzas/saldos ← 201 id={}", ret.afectado);
@@ -105,11 +113,17 @@ pub async fn alta(
 )]
 pub async fn baja(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     info!("DELETE /finanzas/saldos/{}", id);
 
-    let ret = svc::baja(&state.postgres, id).await;
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    let ret = svc::baja(&state.postgres, id, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("DELETE /finanzas/saldos/{} ← 200 OK", id);
@@ -134,9 +148,15 @@ pub async fn baja(
 )]
 pub async fn cambios(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<SaldosBancosInput>,
 ) -> (StatusCode, Json<Value>) {
     debug!(id = ?body.id, "PUT /finanzas/saldos");
+
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
 
     let Some(_) = body.id else {
         return (StatusCode::BAD_REQUEST, Json(json!({ "codigo": -1, "mensaje": "El campo id es requerido para cambios" })));
@@ -150,7 +170,7 @@ pub async fn cambios(
         }
     };
 
-    let ret = svc::cambios(&state.postgres, &sdo).await;
+    let ret = svc::cambios(&state.postgres, &sdo, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("PUT /finanzas/saldos ← 200 OK afectado={}", ret.afectado);
@@ -176,11 +196,17 @@ pub async fn cambios(
 )]
 pub async fn consulta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /finanzas/saldos/{}", id);
 
-    match svc::consulta(&state.postgres, id).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::consulta(&state.postgres, id, tenant_id).await {
         Ok(Some(s)) => {
             info!("GET /finanzas/saldos/{} ← 200", id);
             (StatusCode::OK, Json(saldo_json(&s)))
@@ -211,11 +237,17 @@ pub async fn consulta(
 )]
 pub async fn saldos_x_banco(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(banco): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!(banco, "GET /finanzas/saldos/banco/{}", banco);
 
-    match svc::saldos_x_banco(&state.postgres, banco).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::saldos_x_banco(&state.postgres, banco, tenant_id).await {
         Ok(lista) => {
             info!("GET /finanzas/saldos/banco/{} ← 200 {} registros", banco, lista.len());
             let items: Vec<Value> = lista.iter().map(saldo_json).collect();
@@ -246,10 +278,16 @@ pub async fn saldos_x_banco(
 )]
 pub async fn saldos_todos(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /finanzas/saldos");
 
-    match svc::saldos_todos(&state.postgres).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::saldos_todos(&state.postgres, tenant_id).await {
         Ok(lista) => {
             info!("GET /finanzas/saldos ← 200 {} registros", lista.len());
             let items: Vec<Value> = lista.iter().map(saldo_json).collect();

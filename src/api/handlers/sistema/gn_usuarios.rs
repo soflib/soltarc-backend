@@ -11,6 +11,7 @@
 use axum::{
     extract::{Path, State},
     http::StatusCode,
+    Extension,
     Json,
 };
 use serde::Deserialize;
@@ -18,7 +19,11 @@ use serde_json::{json, Value};
 use tracing::{debug, error, info};
 use utoipa::ToSchema;
 
+use uuid::Uuid;
+
+use crate::api::middleware::roles::AuthUser;
 use crate::domain::models::gn_usuarios::GnUsuarios;
+use crate::generated::auth::GetAllUsersRequest;
 use crate::infrastructure::db::app_state::AppState;
 use crate::services::sistema::gn_usuarios as svc;
 
@@ -83,12 +88,18 @@ fn usuario_json(u: &GnUsuarios) -> Value {
 )]
 pub async fn alta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<GnUsuariosInput>,
 ) -> (StatusCode, Json<Value>) {
     debug!(user_id = %body.user_id, "POST /sistema/usuarios");
 
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
     let usr = to_model(body);
-    let ret = svc::alta(&state.postgres, &usr).await;
+    let ret = svc::alta(&state.postgres, &usr, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("POST /sistema/usuarios ← 201 id={}", ret.afectado);
@@ -113,11 +124,17 @@ pub async fn alta(
 )]
 pub async fn baja(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     info!("DELETE /sistema/usuarios/{}", id);
 
-    let ret = svc::baja(&state.postgres, id).await;
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    let ret = svc::baja(&state.postgres, id, tenant_id).await;
 
     if ret.afectado > 0 {
         (StatusCode::OK, Json(json!({ "codigo": ret.codigo, "afectado": ret.afectado, "mensaje": ret.mensaje })))
@@ -141,16 +158,22 @@ pub async fn baja(
 )]
 pub async fn cambios(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<GnUsuariosInput>,
 ) -> (StatusCode, Json<Value>) {
     debug!(id = ?body.id, "PUT /sistema/usuarios");
+
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
 
     let Some(_) = body.id else {
         return (StatusCode::BAD_REQUEST, Json(json!({ "codigo": -1, "mensaje": "El campo id es requerido para cambios" })));
     };
 
     let usr = to_model(body);
-    let ret = svc::cambios(&state.postgres, &usr).await;
+    let ret = svc::cambios(&state.postgres, &usr, tenant_id).await;
 
     if ret.afectado > 0 {
         (StatusCode::OK, Json(json!({ "codigo": ret.codigo, "afectado": ret.afectado, "mensaje": ret.mensaje })))
@@ -175,11 +198,17 @@ pub async fn cambios(
 )]
 pub async fn consulta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /sistema/usuarios/{}", id);
 
-    match svc::consulta(&state.postgres, id).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::consulta(&state.postgres, id, tenant_id).await {
         Ok(Some(u)) => (StatusCode::OK, Json(usuario_json(&u))),
         Ok(None)    => (StatusCode::NOT_FOUND, Json(json!({ "codigo": -41, "mensaje": "Usuario no encontrado" }))),
         Err(rc)     => {
@@ -202,10 +231,16 @@ pub async fn consulta(
 )]
 pub async fn obtiene_todo(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /sistema/usuarios");
 
-    match svc::obtiene_todo(&state.postgres).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::obtiene_todo(&state.postgres, tenant_id).await {
         Ok(lista) => {
             info!("GET /sistema/usuarios ← 200 {} registros", lista.len());
             let items: Vec<Value> = lista.iter().map(usuario_json).collect();
@@ -223,4 +258,43 @@ pub async fn obtiene_todo(
             (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "codigo": rc.codigo, "mensaje": rc.mensaje })))
         }
     }
+}
+
+// ── Sync con usuarios reales ────────────────────────────────────────────────
+// Liga cada usuario real (auth.users) del tenant a su perfil gn_usuarios
+// (usuario_uuid + nivel default por rol). Idempotente. Necesario para tenants
+// existentes; los nuevos se sincronizan solos al registrar el admin.
+
+#[utoipa::path(
+    post,
+    path = "/sistema/usuarios/sync",
+    responses(
+        (status = 200, description = "Usuarios sincronizados", body = Value),
+        (status = 502, description = "No se pudo consultar auth", body = Value),
+    ),
+    tag = "SistemaUsuarios"
+)]
+pub async fn sync(
+    State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
+) -> (StatusCode, Json<Value>) {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    let mut client = state.auth_grpc.clone();
+    let resp = match client.get_all_users(GetAllUsersRequest { limit: 1000, offset: 0, tenant_id: auth_user.tenant_id.clone() }).await {
+        Ok(r)  => r,
+        Err(e) => {
+            error!("POST /sistema/usuarios/sync ← 502 {}", e);
+            return (StatusCode::BAD_GATEWAY, Json(json!({ "codigo": -1, "mensaje": "No se pudo obtener usuarios de auth" })));
+        }
+    };
+    let lista: Vec<(Uuid, String, String)> = resp.users.into_iter()
+        .filter_map(|u| Uuid::parse_str(&u.user_id).ok().map(|id| (id, u.email, u.role)))
+        .collect();
+    let n = crate::dal::gn_usuarios::sync_for_tenant(&state.postgres, tenant_id, &lista).await;
+    info!("POST /sistema/usuarios/sync ← 200 {} usuarios", n);
+    (StatusCode::OK, Json(json!({ "sincronizados": n })))
 }

@@ -8,11 +8,13 @@
 use axum::{
     extract::{Path, State},
     http::StatusCode,
+    Extension,
     Json,
 };
 use serde_json::{json, Value};
 use tracing::{debug, error, info};
 
+use crate::api::middleware::roles::AuthUser;
 use crate::infrastructure::db::app_state::AppState;
 use crate::services::clients::project_tasks as svc;
 
@@ -29,13 +31,21 @@ use crate::services::clients::project_tasks as svc;
 )]
 pub async fn project_tasks(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /clients/portal/projects/{}/tasks", id);
+    if let Some(err) = super::ensure_proyecto(&state, &auth_user, id).await { return err; }
 
-    let (tareas_res, egresos_res) = tokio::join!(
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    let (tareas_res, egresos_res, estados) = tokio::join!(
         svc::carga_tareas(&state.postgres, id),
-        svc::total_egresos(&state.postgres, id),
+        svc::total_egresos(&state.postgres, id, tenant_id),
+        svc::estados_partida_map(&state.postgres, tenant_id),
     );
 
     let tareas = match tareas_res {
@@ -71,8 +81,9 @@ pub async fn project_tasks(
             "fecha_inicio": t.fecha_inicio.to_string(),
             "fecha_fin":    t.fecha_fin.to_string(),
             "fecha_termina": t.fecha_termina.to_string(),
-            "estado":       t.estado,
-            "nodo":         t.nodo,
+            "estado":        t.estado,
+            "estado_nombre": estados.get(&t.estado),
+            "nodo":          t.nodo,
         })).collect::<Vec<_>>(),
     })))
 }

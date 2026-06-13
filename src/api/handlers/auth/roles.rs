@@ -125,6 +125,8 @@ pub async fn assign_role(
         phone:     String::new(),
         role:      body.role,
         status:    String::new(),
+        email:     String::new(),
+        username:  String::new(),
     }).await {
         Ok(u) => (StatusCode::OK, Json(json!({
             "user_id":  u.user_id,

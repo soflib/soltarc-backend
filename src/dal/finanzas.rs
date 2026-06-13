@@ -39,16 +39,19 @@ pub async fn trx_financieras(pool: &PgPool, proyecto: i32) -> Result<Vec<TrxFina
 // ─────────────────────────────────────────────
 // LLENA DET PROYECTOS — sp_cpa_FinanzasProySum
 // nivel tiene default 5 igual que en C#
+// El SP filtra por tenant y por asignaciones (cpa_proyecto_asignaciones).
 // ─────────────────────────────────────────────
 pub async fn llena_det_proyectos(
     pool: &PgPool,
+    tenant_id: uuid::Uuid,
     grupo: i32,
     usuario: i32,
     nivel: i32,        // default: 5
 ) -> Result<Vec<ResumenProyecto>, ReturnCode> {
     let result = sqlx::query_as::<_, ResumenProyecto>(
-        "SELECT * FROM arqeth.sp_cpa_FinanzasProySum($1, $2, $3)"
+        "SELECT * FROM arqeth.sp_cpa_FinanzasProySum($1, $2, $3, $4)"
     )
+    .bind(tenant_id)
     .bind(grupo)
     .bind(usuario)
     .bind(nivel)

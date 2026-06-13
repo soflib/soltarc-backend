@@ -9,6 +9,7 @@ use utoipa::ToSchema;
 pub struct FlujoCaja {
     pub tipo: String,
     pub banco: i32,
+    pub banco_nombre: Option<String>,
     #[schema(value_type = f64)]
     pub monto: Decimal,
 }

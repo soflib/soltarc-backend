@@ -51,6 +51,8 @@ pub struct UpdateUserInput {
     pub phone:     Option<String>,
     pub role:      Option<String>,
     pub status:    Option<String>,
+    pub email:     Option<String>,
+    pub username:  Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
@@ -280,6 +282,8 @@ pub async fn update_user(
         phone:     body.phone.unwrap_or_default(),
         role:      body.role.unwrap_or_default(),
         status:    body.status.unwrap_or_default(),
+        email:     body.email.unwrap_or_default(),
+        username:  body.username.unwrap_or_default(),
     };
 
     let mut client = state.auth_grpc;

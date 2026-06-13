@@ -10,33 +10,34 @@ use crate::domain::models::ingresos::{Ingresos, IngresosFilter};
 use crate::domain::models::lookup::PageOf;
 use crate::infrastructure::db::return_code::ReturnCode;
 use sqlx::PgPool;
+use uuid::Uuid;
 
-pub async fn alta(pool: &PgPool, ing: &Ingresos) -> ReturnCode {
-    dal::alta(pool, ing).await
+pub async fn alta(pool: &PgPool, ing: &Ingresos, tenant_id: Uuid) -> ReturnCode {
+    dal::alta(pool, ing, tenant_id).await
 }
 
-pub async fn baja(pool: &PgPool, id: i32) -> ReturnCode {
-    dal::baja(pool, id).await
+pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
+    dal::baja(pool, id, tenant_id).await
 }
 
-pub async fn cambios(pool: &PgPool, ing: &Ingresos) -> ReturnCode {
-    dal::cambios(pool, ing).await
+pub async fn cambios(pool: &PgPool, ing: &Ingresos, tenant_id: Uuid) -> ReturnCode {
+    dal::cambios(pool, ing, tenant_id).await
 }
 
-pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<Ingresos>, ReturnCode> {
-    dal::consulta(pool, id).await
+pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<Ingresos>, ReturnCode> {
+    dal::consulta(pool, id, tenant_id).await
 }
 
 // ─────────────────────────────────────────────
 // LISTA — sin filtro de texto, opcionalmente por proyecto/cliente
 // ─────────────────────────────────────────────
-pub async fn lista(pool: &PgPool, proyecto: Option<i32>, cliente: Option<i32>) -> Result<Vec<Ingresos>, ReturnCode> {
-    dal::lista(pool, proyecto, cliente).await
+pub async fn lista(pool: &PgPool, proyecto: Option<i32>, cliente: Option<i32>, tenant_id: Uuid) -> Result<Vec<Ingresos>, ReturnCode> {
+    dal::lista(pool, proyecto, cliente, tenant_id).await
 }
 
 // ─────────────────────────────────────────────
 // SEARCH — listado paginado con filtros + texto libre (ILIKE)
 // ─────────────────────────────────────────────
-pub async fn search(pool: &PgPool, filtros: &IngresosFilter) -> Result<PageOf<Ingresos>, ReturnCode> {
-    dal::search(pool, filtros).await
+pub async fn search(pool: &PgPool, filtros: &IngresosFilter, tenant_id: Uuid) -> Result<PageOf<Ingresos>, ReturnCode> {
+    dal::search(pool, filtros, tenant_id).await
 }

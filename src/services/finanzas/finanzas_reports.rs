@@ -7,6 +7,7 @@ use crate::infrastructure::db::return_code::ReturnCode;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 use time::Date;
+use uuid::Uuid;
 
 pub async fn trx_financieras(pool: &PgPool, proyecto: i32) -> Result<Vec<TrxFinanciera>, ReturnCode> {
     finanzas::trx_financieras(pool, proyecto).await
@@ -52,10 +53,11 @@ pub async fn recibo_honorarios(
     pool: &PgPool,
     id: i32,
     tipo: &str,
+    tenant_id: Uuid,
 ) -> Result<ReciboH, ReturnCode> {
     match tipo {
         "egreso" => {
-            let egr = dal_egresos::consulta(pool, id)
+            let egr = dal_egresos::consulta(pool, id, tenant_id)
                 .await?
                 .ok_or_else(|| ReturnCode { codigo: -1, afectado: 0, mensaje: format!("Egreso {} no encontrado", id) })?;
             Ok(ReciboH {
@@ -72,7 +74,7 @@ pub async fn recibo_honorarios(
             })
         }
         "ingreso" => {
-            let ing = dal_ingresos::consulta(pool, id)
+            let ing = dal_ingresos::consulta(pool, id, tenant_id)
                 .await?
                 .ok_or_else(|| ReturnCode { codigo: -1, afectado: 0, mensaje: format!("Ingreso {} no encontrado", id) })?;
             Ok(ReciboH {

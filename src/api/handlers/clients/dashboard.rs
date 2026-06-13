@@ -7,23 +7,16 @@
 //   GET /clients/portal/projects/{id}/ppto  → total_ppto
 
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State, Extension},
     http::StatusCode,
     Json,
 };
-use serde::Deserialize;
 use serde_json::{json, Value};
 use tracing::{debug, error, info};
 
 use crate::infrastructure::db::app_state::AppState;
+use crate::api::middleware::roles::AuthUser;
 use crate::services::clients::dashboard as svc;
-
-#[derive(Debug, Deserialize)]
-pub struct DashboardQuery {
-    pub grupo:   i32,
-    pub usuario: i32,
-    pub nivel:   i32,
-}
 
 // ─────────────────────────────────────────────
 // LLENA DET PROYECTOS
@@ -31,13 +24,8 @@ pub struct DashboardQuery {
 #[utoipa::path(
     get,
     path = "/clients/portal/dashboard",
-    params(
-        ("grupo"   = i32, Query, description = "Id de grupo"),
-        ("usuario" = i32, Query, description = "Id de usuario"),
-        ("nivel"   = i32, Query, description = "Nivel de acceso"),
-    ),
     responses(
-        (status = 200, description = "Lista de proyectos del cliente", body = Value),
+        (status = 200, description = "Proyectos visibles para el usuario logueado", body = Value),
         (status = 404, description = "Sin proyectos",                  body = Value),
         (status = 500, description = "Error de base de datos",         body = Value),
     ),
@@ -45,11 +33,41 @@ pub struct DashboardQuery {
 )]
 pub async fn llena_det_proyectos(
     State(state): State<AppState>,
-    Query(q): Query<DashboardQuery>,
+    Extension(auth_user): Extension<AuthUser>,
 ) -> (StatusCode, Json<Value>) {
-    debug!("GET /clients/portal/dashboard grupo={} usuario={} nivel={}", q.grupo, q.usuario, q.nivel);
+    debug!("GET /clients/portal/dashboard (user={})", auth_user.user_id);
 
-    match svc::llena_det_proyectos(&state.postgres, q.grupo, q.usuario, q.nivel).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    // Visibilidad por el PERFIL REAL del usuario logueado (NO params del front):
+    // Admin → nivel 1 (ve todo); el resto según su perfil de negocio
+    // (1=todo, 2=su grupo, 3=solo lo asignado a él). Sin perfil → nivel 1.
+    let (grupo, gn_usr_id, nivel) = if auth_user.role.eq_ignore_ascii_case("Admin") {
+        (0, 0, 1)
+    } else {
+        match uuid::Uuid::parse_str(&auth_user.user_id) {
+            Ok(uid) => crate::dal::gn_usuarios::perfil_de(&state.postgres, tenant_id, uid).await,
+            Err(_)  => (0, 0, 1),
+        }
+    };
+
+    // Alcance real: nivel 2 necesita un grupo asignado (>0); nivel 3 necesita una
+    // asignación directa (>0). Sin asignación (0) NO ve nada — no debe "caer" a los
+    // proyectos sin grupo/usuario (gn_id/gn_usr_id = 0). Solo Admin/nivel 1 ve todo.
+    let con_alcance = match nivel {
+        1 => true,
+        2 => grupo > 0,
+        _ => gn_usr_id > 0,
+    };
+    if !con_alcance {
+        info!("GET /clients/portal/dashboard ← 200 0 proyectos (usuario sin asignación)");
+        return (StatusCode::OK, Json(json!([])));
+    }
+
+    match svc::llena_det_proyectos(&state.postgres, tenant_id, grupo, gn_usr_id, nivel).await {
         Ok(lista) => {
             info!("GET /clients/portal/dashboard ← 200 {} proyectos", lista.len());
             (StatusCode::OK, Json(json!(lista.iter().map(|p| json!({
@@ -90,9 +108,11 @@ pub async fn llena_det_proyectos(
 )]
 pub async fn total_ppto(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /clients/portal/projects/{}/ppto", id);
+    if let Some(err) = super::ensure_proyecto(&state, &auth_user, id).await { return err; }
 
     match svc::total_ppto(&state.postgres, id).await {
         Ok(total) => {

@@ -7,6 +7,7 @@
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
+    Extension,
     Json,
 };
 use chrono::{NaiveDate, NaiveDateTime};
@@ -17,6 +18,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 use tracing::{debug, error, info};
 
+use crate::api::middleware::roles::AuthUser;
 use crate::domain::models::ingresos::{Ingresos, IngresosFilter};
 use crate::domain::models::lookup::LookupItem;
 use crate::infrastructure::db::app_state::AppState;
@@ -131,9 +133,15 @@ fn ingreso_json(i: &Ingresos) -> Value {
 )]
 pub async fn alta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<IngresosInput>,
 ) -> (StatusCode, Json<Value>) {
     debug!(proyecto = body.proyecto, monto = body.monto, "POST /finanzas/ingresos");
+
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
 
     let ing = match parse_input(body) {
         Ok(i)    => i,
@@ -143,7 +151,7 @@ pub async fn alta(
         }
     };
 
-    let ret = svc::alta(&state.postgres, &ing).await;
+    let ret = svc::alta(&state.postgres, &ing, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("POST /finanzas/ingresos ← 201 id={}", ret.afectado);
@@ -168,11 +176,17 @@ pub async fn alta(
 )]
 pub async fn baja(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     info!("DELETE /finanzas/ingresos/{}", id);
 
-    let ret = svc::baja(&state.postgres, id).await;
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    let ret = svc::baja(&state.postgres, id, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("DELETE /finanzas/ingresos/{} ← 200 OK", id);
@@ -197,9 +211,15 @@ pub async fn baja(
 )]
 pub async fn cambios(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<IngresosInput>,
 ) -> (StatusCode, Json<Value>) {
     debug!(id = ?body.id, "PUT /finanzas/ingresos");
+
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
 
     let Some(_) = body.id else {
         return (StatusCode::BAD_REQUEST, Json(json!({ "codigo": -1, "mensaje": "El campo id es requerido para cambios" })));
@@ -213,7 +233,7 @@ pub async fn cambios(
         }
     };
 
-    let ret = svc::cambios(&state.postgres, &ing).await;
+    let ret = svc::cambios(&state.postgres, &ing, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("PUT /finanzas/ingresos ← 200 OK afectado={}", ret.afectado);
@@ -239,11 +259,17 @@ pub async fn cambios(
 )]
 pub async fn consulta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /finanzas/ingresos/{}", id);
 
-    match svc::consulta(&state.postgres, id).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::consulta(&state.postgres, id, tenant_id).await {
         Ok(Some(i)) => {
             info!("GET /finanzas/ingresos/{} ← 200", id);
             (StatusCode::OK, Json(ingreso_json(&i)))
@@ -286,8 +312,14 @@ pub async fn consulta(
 )]
 pub async fn lista(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<IngresosSearchQuery>,
 ) -> (StatusCode, Json<Value>) {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
     let fecha_ini = match parse_date_opt(q.fecha_ini.as_deref(), "fecha_ini") {
         Ok(v)    => v,
         Err(msg) => return (StatusCode::BAD_REQUEST, Json(json!({ "codigo": -1, "mensaje": msg }))),
@@ -312,7 +344,7 @@ pub async fn lista(
     };
     debug!("GET /finanzas/ingresos page={} size={} filtros={:?}", page, size, filtros);
 
-    match svc::search(&state.postgres, &filtros).await {
+    match svc::search(&state.postgres, &filtros, tenant_id).await {
         Ok(page_res) => {
             info!("GET /finanzas/ingresos ← 200 {}/{} items", page_res.items.len(), page_res.total);
             let items: Vec<Value> = page_res.items.iter().map(ingreso_json).collect();
@@ -352,8 +384,14 @@ pub async fn lista(
 )]
 pub async fn lookup(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<IngresosLookupQuery>,
 ) -> (StatusCode, Json<Value>) {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
     let limit = q.limit.unwrap_or(20).clamp(1, 100);
     let filtros = IngresosFilter {
         proyecto:  q.proyecto,
@@ -366,7 +404,7 @@ pub async fn lookup(
     };
     debug!("GET /finanzas/ingresos/lookup filtros={:?}", filtros);
 
-    match svc::search(&state.postgres, &filtros).await {
+    match svc::search(&state.postgres, &filtros, tenant_id).await {
         Ok(page_res) => {
             let items: Vec<LookupItem> = page_res.items.into_iter().map(|i| LookupItem {
                 id: i.id.unwrap_or(0),

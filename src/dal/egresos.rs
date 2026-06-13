@@ -22,9 +22,9 @@ use uuid::Uuid;
 // ─────────────────────────────────────────────
 // ALTA — sp_cpa_EgresosAdd
 // ─────────────────────────────────────────────
-pub async fn alta(pool: &PgPool, egr: &Egresos) -> ReturnCode {
+pub async fn alta(pool: &PgPool, egr: &Egresos, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_EgresosAdd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"
+        "SELECT arqeth.sp_cpa_EgresosAdd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)"
     )
     .bind(egr.fecha)          // $1  p_fecha
     .bind(egr.banco)          // $2  p_banco
@@ -38,6 +38,7 @@ pub async fn alta(pool: &PgPool, egr: &Egresos) -> ReturnCode {
     .bind(egr.proyecto)       // $10 p_proyecto
     .bind(egr.proveedor)      // $11 p_proveedor
     .bind(egr.usuario)        // $12 p_usuario
+    .bind(tenant_id)          // $13 p_tenant_id
     .fetch_one(pool)
     .await;
 
@@ -52,11 +53,12 @@ pub async fn alta(pool: &PgPool, egr: &Egresos) -> ReturnCode {
 // BAJA — sp_cpa_EgresosDel
 // El SP devuelve (codigo, mensaje, afectado) como ResultSet
 // ─────────────────────────────────────────────
-pub async fn baja(pool: &PgPool, egreso: i32) -> ReturnCode {
+pub async fn baja(pool: &PgPool, egreso: i32, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_as::<_, ReturnCode>(
-        "SELECT codigo, mensaje, afectado FROM arqeth.sp_cpa_EgresosDel($1)"
+        "SELECT codigo, mensaje, afectado FROM arqeth.sp_cpa_EgresosDel($1, $2)"
     )
     .bind(egreso)
+    .bind(tenant_id)
     .fetch_optional(pool)
     .await;
 
@@ -70,9 +72,9 @@ pub async fn baja(pool: &PgPool, egreso: i32) -> ReturnCode {
 // ─────────────────────────────────────────────
 // CAMBIOS — sp_cpa_EgresosUpd
 // ─────────────────────────────────────────────
-pub async fn cambios(pool: &PgPool, egr: &Egresos) -> ReturnCode {
+pub async fn cambios(pool: &PgPool, egr: &Egresos, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_EgresosUpd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)"
+        "SELECT arqeth.sp_cpa_EgresosUpd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)"
     )
     .bind(egr.id.unwrap_or(0))  // $1  p_id
     .bind(egr.fecha)            // $2  p_fecha
@@ -87,6 +89,7 @@ pub async fn cambios(pool: &PgPool, egr: &Egresos) -> ReturnCode {
     .bind(egr.proyecto)         // $11 p_proyecto
     .bind(egr.proveedor)        // $12 p_proveedor
     .bind(egr.usuario)          // $13 p_usuario
+    .bind(tenant_id)            // $14 p_tenant_id
     .fetch_one(pool)
     .await;
 
@@ -100,11 +103,12 @@ pub async fn cambios(pool: &PgPool, egr: &Egresos) -> ReturnCode {
 // ─────────────────────────────────────────────
 // CONSULTA — sp_cpa_EgresosQry
 // ─────────────────────────────────────────────
-pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<Egresos>, ReturnCode> {
+pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<Egresos>, ReturnCode> {
     let result = sqlx::query_as::<_, Egresos>(
-        "SELECT * FROM arqeth.sp_cpa_EgresosQry($1)"
+        "SELECT * FROM arqeth.sp_cpa_EgresosQry($1, $2)"
     )
     .bind(id)
+    .bind(tenant_id)
     .fetch_optional(pool)
     .await;
 
@@ -117,11 +121,12 @@ pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<Egresos>, ReturnC
 // ─────────────────────────────────────────────
 // CARGA EGRESOS PROYECTO XREF — sp_cpa_EgresosQryProyxRef
 // ─────────────────────────────────────────────
-pub async fn carga_egresos_proy_xref(pool: &PgPool, proyecto: i32) -> Result<Vec<Egresos>, ReturnCode> {
+pub async fn carga_egresos_proy_xref(pool: &PgPool, proyecto: i32, tenant_id: Uuid) -> Result<Vec<Egresos>, ReturnCode> {
     let result = sqlx::query_as::<_, Egresos>(
-        "SELECT * FROM arqeth.sp_cpa_EgresosQryProyxRef($1)"
+        "SELECT * FROM arqeth.sp_cpa_EgresosQryProyxRef($1, $2)"
     )
     .bind(proyecto)
+    .bind(tenant_id)
     .fetch_all(pool)
     .await;
 
@@ -139,11 +144,12 @@ pub async fn carga_egresos_proy_xref(pool: &PgPool, proyecto: i32) -> Result<Vec
 // El SP debe implementar:
 //   SELECT COALESCE(SUM(egr_Monto), 0) FROM cpa_Egresos WHERE egr_Proyecto = $1
 // ─────────────────────────────────────────────
-pub async fn total_egresos(pool: &PgPool, proyecto: i32) -> Result<rust_decimal::Decimal, ReturnCode> {
+pub async fn total_egresos(pool: &PgPool, proyecto: i32, tenant_id: Uuid) -> Result<rust_decimal::Decimal, ReturnCode> {
     let result = sqlx::query_scalar::<_, rust_decimal::Decimal>(
-        "SELECT arqeth.sp_cpa_EgresosTotalProy($1)"
+        "SELECT arqeth.sp_cpa_EgresosTotalProy($1, $2)"
     )
     .bind(proyecto)
+    .bind(tenant_id)
     .fetch_one(pool)
     .await;
 
@@ -159,9 +165,9 @@ pub async fn total_egresos(pool: &PgPool, proyecto: i32) -> Result<rust_decimal:
 // referencia/comentario/proveedor/proyecto + paginación.
 // El SP devuelve total_count en cada fila.
 // ─────────────────────────────────────────────
-pub async fn search(pool: &PgPool, f: &EgresosFilter) -> Result<PageOf<Egresos>, ReturnCode> {
+pub async fn search(pool: &PgPool, f: &EgresosFilter, tenant_id: Uuid) -> Result<PageOf<Egresos>, ReturnCode> {
     let rows = sqlx::query_as::<_, EgresoConTotal>(
-        "SELECT * FROM arqeth.sp_cpa_egresos_search($1, $2, $3, $4, $5, $6, $7, $8)"
+        "SELECT * FROM arqeth.sp_cpa_egresos_search($1, $2, $3, $4, $5, $6, $7, $8, $9)"
     )
     .bind(f.proyecto)
     .bind(f.proveedor)
@@ -171,6 +177,7 @@ pub async fn search(pool: &PgPool, f: &EgresosFilter) -> Result<PageOf<Egresos>,
     .bind(f.q.as_deref())
     .bind(f.offset)
     .bind(f.limit)
+    .bind(tenant_id)
     .fetch_all(pool)
     .await;
 
@@ -184,4 +191,16 @@ pub async fn search(pool: &PgPool, f: &EgresosFilter) -> Result<PageOf<Egresos>,
         }
         Err(e) => Err(ReturnCode { codigo: -115, afectado: 0, mensaje: e.to_string() }),
     }
+}
+
+// ─────────────────────────────────────────────
+// SEED por tenant — sp_cpa_egresos_seed
+// Idempotente: re-llamarlo para el mismo tenant no duplica filas.
+// ─────────────────────────────────────────────
+pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid, usuario: Uuid) -> Result<i32, sqlx::Error> {
+    sqlx::query_scalar::<_, i32>("SELECT arqeth.sp_cpa_egresos_seed($1, $2)")
+        .bind(tenant_id)
+        .bind(usuario)
+        .fetch_one(pool)
+        .await
 }

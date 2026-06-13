@@ -73,9 +73,10 @@ pub async fn consulta_flujo(
             info!("GET /finanzas/flujo-caja ← 200 {} registros", lista.len());
             let total: rust_decimal::Decimal = lista.iter().map(|f| f.monto).sum();
             let items: Vec<Value> = lista.iter().map(|f| json!({
-                "tipo":  f.tipo,
-                "banco": f.banco,
-                "monto": f.monto.to_string(),
+                "tipo":         f.tipo,
+                "banco":        f.banco,
+                "banco_nombre": f.banco_nombre,
+                "monto":        f.monto.to_string(),
             })).collect();
             match q.format.as_deref() {
                 Some("xlsx") => match render::xlsx::flujo_caja(&items) {

@@ -8,6 +8,7 @@
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
+    Extension,
     Json,
 };
 use chrono::{NaiveDate, NaiveDateTime};
@@ -18,6 +19,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 use tracing::{debug, error, info};
 
+use crate::api::middleware::roles::AuthUser;
 use crate::domain::models::egresos::{Egresos, EgresosFilter};
 use crate::domain::models::lookup::LookupItem;
 use crate::infrastructure::db::app_state::AppState;
@@ -144,9 +146,15 @@ fn egreso_json(e: &Egresos) -> Value {
 )]
 pub async fn alta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<EgresosInput>,
 ) -> (StatusCode, Json<Value>) {
     debug!(proyecto = body.proyecto, monto = body.monto, "POST /finanzas/egresos");
+
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
 
     let egr = match parse_input(body) {
         Ok(e)    => e,
@@ -156,7 +164,7 @@ pub async fn alta(
         }
     };
 
-    let ret = svc::alta(&state.postgres, &egr).await;
+    let ret = svc::alta(&state.postgres, &egr, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("POST /finanzas/egresos ← 201 id={}", ret.afectado);
@@ -181,11 +189,17 @@ pub async fn alta(
 )]
 pub async fn baja(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     info!("DELETE /finanzas/egresos/{}", id);
 
-    let ret = svc::baja(&state.postgres, id).await;
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    let ret = svc::baja(&state.postgres, id, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("DELETE /finanzas/egresos/{} ← 200 OK", id);
@@ -210,9 +224,15 @@ pub async fn baja(
 )]
 pub async fn cambios(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<EgresosInput>,
 ) -> (StatusCode, Json<Value>) {
     debug!(id = ?body.id, "PUT /finanzas/egresos");
+
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
 
     let Some(_) = body.id else {
         return (StatusCode::BAD_REQUEST, Json(json!({ "codigo": -1, "mensaje": "El campo id es requerido para cambios" })));
@@ -226,7 +246,7 @@ pub async fn cambios(
         }
     };
 
-    let ret = svc::cambios(&state.postgres, &egr).await;
+    let ret = svc::cambios(&state.postgres, &egr, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("PUT /finanzas/egresos ← 200 OK afectado={}", ret.afectado);
@@ -252,11 +272,17 @@ pub async fn cambios(
 )]
 pub async fn consulta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /finanzas/egresos/{}", id);
 
-    match svc::consulta(&state.postgres, id).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::consulta(&state.postgres, id, tenant_id).await {
         Ok(Some(e)) => {
             info!("GET /finanzas/egresos/{} ← 200", id);
             (StatusCode::OK, Json(egreso_json(&e)))
@@ -291,15 +317,21 @@ pub async fn consulta(
 )]
 pub async fn total(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<EgresosQuery>,
 ) -> (StatusCode, Json<Value>) {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
     let Some(proyecto) = q.proyecto else {
         return (StatusCode::BAD_REQUEST, Json(json!({ "codigo": -1, "mensaje": "El parámetro 'proyecto' es requerido" })));
     };
 
     debug!(proyecto, "GET /finanzas/egresos/total");
 
-    match svc::total_egresos(&state.postgres, proyecto).await {
+    match svc::total_egresos(&state.postgres, proyecto, tenant_id).await {
         Ok(total) => {
             info!("GET /finanzas/egresos/total?proyecto={} ← 200 total={}", proyecto, total);
             (StatusCode::OK, Json(json!({ "proyecto": proyecto, "total_egresos": total.to_string() })))
@@ -329,15 +361,21 @@ pub async fn total(
 )]
 pub async fn lista(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<EgresosQuery>,
 ) -> (StatusCode, Json<Value>) {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
     let Some(proyecto) = q.proyecto else {
         return (StatusCode::BAD_REQUEST, Json(json!({ "codigo": -1, "mensaje": "El parámetro 'proyecto' es requerido" })));
     };
 
     debug!(proyecto, "GET /finanzas/egresos");
 
-    match svc::carga_egresos_proy_xref(&state.postgres, proyecto).await {
+    match svc::carga_egresos_proy_xref(&state.postgres, proyecto, tenant_id).await {
         Ok(lista) => {
             info!("GET /finanzas/egresos?proyecto={} ← 200 {} registros", proyecto, lista.len());
             let items: Vec<Value> = lista.iter().map(egreso_json).collect();
@@ -381,8 +419,14 @@ pub async fn lista(
 )]
 pub async fn search(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<EgresosSearchQuery>,
 ) -> (StatusCode, Json<Value>) {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
     let fecha_ini = match parse_date_opt(q.fecha_ini.as_deref(), "fecha_ini") {
         Ok(v)    => v,
         Err(msg) => return (StatusCode::BAD_REQUEST, Json(json!({ "codigo": -1, "mensaje": msg }))),
@@ -408,7 +452,7 @@ pub async fn search(
     };
     debug!("GET /finanzas/egresos/search page={} size={} filtros={:?}", page, size, filtros);
 
-    match svc::search(&state.postgres, &filtros).await {
+    match svc::search(&state.postgres, &filtros, tenant_id).await {
         Ok(page_res) => {
             info!("GET /finanzas/egresos/search ← 200 {}/{} items", page_res.items.len(), page_res.total);
             let items: Vec<Value> = page_res.items.iter().map(egreso_json).collect();
@@ -449,8 +493,14 @@ pub async fn search(
 )]
 pub async fn lookup(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<EgresosLookupQuery>,
 ) -> (StatusCode, Json<Value>) {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
     let limit = q.limit.unwrap_or(20).clamp(1, 100);
     let filtros = EgresosFilter {
         proyecto:     q.proyecto,
@@ -464,7 +514,7 @@ pub async fn lookup(
     };
     debug!("GET /finanzas/egresos/lookup filtros={:?}", filtros);
 
-    match svc::search(&state.postgres, &filtros).await {
+    match svc::search(&state.postgres, &filtros, tenant_id).await {
         Ok(page_res) => {
             let items: Vec<LookupItem> = page_res.items.into_iter().map(|e| LookupItem {
                 id: e.id.unwrap_or(0),

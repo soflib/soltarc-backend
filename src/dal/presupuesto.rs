@@ -163,3 +163,56 @@ pub async fn lookup(pool: &PgPool, q: &str, cliente: Option<i32>, limit: i32, te
         Err(e)    => Err(ReturnCode { codigo: -95, afectado: 0, mensaje: e.to_string() }),
     }
 }
+
+// Autocomplete de presupuestos VISIBLES para el usuario + texto `q`.
+// El acceso DERIVA DEL CLIENTE: el presupuesto es de un cliente (p.cliente), y el
+// usuario lo ve si ese cliente está entre los clientes que ya alcanza por sus
+// proyectos (según nivel/grupo/asignación). gn_id/gn_user_id del presupuesto no se
+// usan (nunca se asignan). Admin/nivel 1 → todos.
+pub async fn lookup_accesibles(
+    pool: &PgPool, tenant_id: Uuid, grupo: i32, gn_usr_id: i32, nivel: i32, q: &str, limit: i32,
+) -> Vec<LookupItem> {
+    sqlx::query_as::<_, LookupItem>(
+        r#"SELECT p.id, p.nombre AS etiqueta
+           FROM arqeth.ppto_presupuesto p
+           WHERE p.tenant_id = $1 AND p.activo = TRUE
+             AND ( $4 = 1
+                   OR p.cliente IN (
+                        SELECT DISTINCT pr.cliente FROM arqeth.cpa_proyectos pr
+                        WHERE pr.tenant_id = $1 AND pr.activo = TRUE
+                          AND ( ($4 = 2  AND $2 > 0 AND EXISTS (
+                                    SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                                    WHERE a.proyecto_id = pr.id AND a.gn_id = $2))
+                                OR ($4 >= 3 AND $3 > 0 AND EXISTS (
+                                    SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                                    WHERE a.proyecto_id = pr.id AND a.gn_usr_id = $3)) ) ) )
+             AND ($5 = '' OR p.nombre ILIKE '%' || $5 || '%')
+           ORDER BY p.nombre
+           LIMIT $6"#,
+    )
+    .bind(tenant_id).bind(grupo).bind(gn_usr_id).bind(nivel).bind(q).bind(limit)
+    .fetch_all(pool).await.unwrap_or_default()
+}
+
+// ¿El usuario puede ver este presupuesto? (deriva del cliente; nivel 1 = sí).
+pub async fn presupuesto_accesible(
+    pool: &PgPool, tenant_id: Uuid, grupo: i32, gn_usr_id: i32, nivel: i32, presupuesto: i32,
+) -> bool {
+    sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM arqeth.ppto_presupuesto p
+            WHERE p.tenant_id = $1 AND p.id = $5
+              AND ( $4 = 1
+                    OR p.cliente IN (
+                         SELECT DISTINCT pr.cliente FROM arqeth.cpa_proyectos pr
+                         WHERE pr.tenant_id = $1 AND pr.activo = TRUE
+                           AND ( ($4 = 2  AND $2 > 0 AND EXISTS (
+                                     SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                                     WHERE a.proyecto_id = pr.id AND a.gn_id = $2))
+                                 OR ($4 >= 3 AND $3 > 0 AND EXISTS (
+                                     SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                                     WHERE a.proyecto_id = pr.id AND a.gn_usr_id = $3)) ) ) ) )"#,
+    )
+    .bind(tenant_id).bind(grupo).bind(gn_usr_id).bind(nivel).bind(presupuesto)
+    .fetch_one(pool).await.unwrap_or(false)
+}

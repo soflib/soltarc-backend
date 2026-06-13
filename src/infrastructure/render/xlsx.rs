@@ -211,7 +211,7 @@ pub fn flujo_caja(data: &[Value]) -> Result<Vec<u8>, String> {
         "Flujo de Caja",
         &[("Tipo", false), ("Banco", false), ("Monto", true)],
         data,
-        &["tipo", "banco", "monto"],
+        &["tipo", "banco_nombre", "monto"],
     )
 }
 

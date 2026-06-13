@@ -31,3 +31,14 @@ pub struct Proyectos {
     pub dir_imagenes: String,
     pub tenant_id: Option<Uuid>,
 }
+
+// Par (grupo, usuario) asignado a un proyecto (cpa_proyecto_asignaciones).
+// gn_usr_id = 0 → "todo el grupo". usuario_user_id es el email en gn_usuarios
+// (el handler lo resuelve a nombre completo vía gRPC al servicio de auth).
+#[derive(Debug, Clone, ToSchema, sqlx::FromRow)]
+pub struct ProyectoAsignacion {
+    pub gn_id: i32,
+    pub gn_usr_id: i32,
+    pub grupo_nombre: String,
+    pub usuario_user_id: String,
+}

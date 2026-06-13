@@ -11,6 +11,7 @@
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
+    Extension,
     Json,
 };
 use serde::Deserialize;
@@ -18,6 +19,7 @@ use serde_json::{json, Value};
 use tracing::{debug, error, info};
 use utoipa::ToSchema;
 
+use crate::api::middleware::roles::AuthUser;
 use crate::domain::models::gn_grupos::GnGrupos;
 use crate::infrastructure::db::app_state::AppState;
 use crate::services::sistema::gn_grupos as svc;
@@ -67,12 +69,18 @@ fn grupo_json(g: &GnGrupos) -> Value {
 )]
 pub async fn alta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<GnGruposInput>,
 ) -> (StatusCode, Json<Value>) {
     debug!(nombre = %body.nombre, "POST /sistema/grupos");
 
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
     let gpo = to_model(body);
-    let ret = svc::alta(&state.postgres, &gpo).await;
+    let ret = svc::alta(&state.postgres, &gpo, tenant_id).await;
 
     if ret.afectado > 0 {
         info!("POST /sistema/grupos ← 201 id={}", ret.afectado);
@@ -97,11 +105,17 @@ pub async fn alta(
 )]
 pub async fn baja(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     info!("DELETE /sistema/grupos/{}", id);
 
-    let ret = svc::baja(&state.postgres, id).await;
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    let ret = svc::baja(&state.postgres, id, tenant_id).await;
 
     if ret.afectado > 0 {
         (StatusCode::OK, Json(json!({ "codigo": ret.codigo, "afectado": ret.afectado, "mensaje": ret.mensaje })))
@@ -125,16 +139,22 @@ pub async fn baja(
 )]
 pub async fn cambios(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Json(body): Json<GnGruposInput>,
 ) -> (StatusCode, Json<Value>) {
     debug!(id = ?body.id, "PUT /sistema/grupos");
+
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
 
     let Some(_) = body.id else {
         return (StatusCode::BAD_REQUEST, Json(json!({ "codigo": -1, "mensaje": "El campo id es requerido para cambios" })));
     };
 
     let gpo = to_model(body);
-    let ret = svc::cambios(&state.postgres, &gpo).await;
+    let ret = svc::cambios(&state.postgres, &gpo, tenant_id).await;
 
     if ret.afectado > 0 {
         (StatusCode::OK, Json(json!({ "codigo": ret.codigo, "afectado": ret.afectado, "mensaje": ret.mensaje })))
@@ -159,11 +179,17 @@ pub async fn cambios(
 )]
 pub async fn consulta(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /sistema/grupos/{}", id);
 
-    match svc::consulta(&state.postgres, id).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    match svc::consulta(&state.postgres, id, tenant_id).await {
         Ok(Some(g)) => (StatusCode::OK, Json(grupo_json(&g))),
         Ok(None)    => (StatusCode::NOT_FOUND, Json(json!({ "codigo": -41, "mensaje": "Grupo no encontrado" }))),
         Err(rc)     => {
@@ -189,12 +215,18 @@ pub async fn consulta(
 )]
 pub async fn obtiene_todo(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<GruposQuery>,
 ) -> (StatusCode, Json<Value>) {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
     let activos = q.activos.unwrap_or(true);
     debug!(activos, "GET /sistema/grupos");
 
-    match svc::obtiene_todo(&state.postgres, activos).await {
+    match svc::obtiene_todo(&state.postgres, activos, tenant_id).await {
         Ok(lista) => {
             info!("GET /sistema/grupos?activos={} ← 200 {} registros", activos, lista.len());
             let items: Vec<Value> = lista.iter().map(grupo_json).collect();

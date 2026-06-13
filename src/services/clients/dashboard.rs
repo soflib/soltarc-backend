@@ -10,11 +10,12 @@ use sqlx::PgPool;
 
 pub async fn llena_det_proyectos(
     pool: &PgPool,
+    tenant_id: uuid::Uuid,
     grupo: i32,
     usuario: i32,
     nivel: i32,
 ) -> Result<Vec<ResumenProyecto>, ReturnCode> {
-    finanzas::llena_det_proyectos(pool, grupo, usuario, nivel).await
+    finanzas::llena_det_proyectos(pool, tenant_id, grupo, usuario, nivel).await
 }
 
 pub async fn total_ppto(pool: &PgPool, proyecto: i32) -> Result<Decimal, ReturnCode> {

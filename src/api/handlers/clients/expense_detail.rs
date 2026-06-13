@@ -29,26 +29,39 @@ use crate::services::clients::expense_detail as svc;
 )]
 pub async fn expense_detail(
     State(state): State<AppState>,
+    axum::Extension(auth_user): axum::Extension<crate::api::middleware::roles::AuthUser>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<Value>) {
     debug!("GET /clients/portal/projects/{}/expense-detail", id);
+    if let Some(err) = super::ensure_proyecto(&state, &auth_user, id).await { return err; }
 
-    match svc::consulta_partidas_xref(&state.postgres, id).await {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+
+    let (lista_res, estados) = tokio::join!(
+        svc::consulta_partidas_xref(&state.postgres, id),
+        crate::services::clients::catalogo_map(&state.postgres, crate::services::clients::CAT_ESTADO_PARTIDAS, tenant_id),
+    );
+
+    match lista_res {
         Ok(lista) => {
             info!("GET /clients/portal/projects/{}/expense-detail ← 200 {} partidas", id, lista.len());
             (StatusCode::OK, Json(json!(lista.iter().map(|p| json!({
-                "id":           p.id,
-                "proyecto":     p.proyecto,
-                "tipo":         p.tipo,
-                "secuencia":    p.secuencia,
-                "descripcion":  p.descripcion,
-                "comentarios":  p.comentarios,
-                "presupuesto":  p.presupuesto.to_string(),
-                "fecha_inicio": p.fecha_inicio.to_string(),
-                "fecha_fin":    p.fecha_fin.to_string(),
+                "id":            p.id,
+                "proyecto":      p.proyecto,
+                "tipo":          p.tipo,
+                "secuencia":     p.secuencia,
+                "descripcion":   p.descripcion,
+                "comentarios":   p.comentarios,
+                "presupuesto":   p.presupuesto.to_string(),
+                "fecha_inicio":  p.fecha_inicio.to_string(),
+                "fecha_fin":     p.fecha_fin.to_string(),
                 "fecha_termina": p.fecha_termina.to_string(),
-                "estado":       p.estado,
-                "nodo":         p.nodo,
+                "estado":        p.estado,
+                "estado_nombre": estados.get(&p.estado),
+                "nodo":          p.nodo,
             })).collect::<Vec<_>>())))
         }
         Err(ret) if ret.codigo < -50 => {

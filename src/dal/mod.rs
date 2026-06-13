@@ -1,3 +1,4 @@
+pub mod archivos;
 pub mod catalog_g;
 pub mod centros_costo;
 pub mod clientes;
@@ -21,6 +22,7 @@ pub mod proyectos;
 pub mod reportes;
 pub mod saldos_bancos;
 pub mod seguridad;
+pub mod tenant_limite;
 pub mod tipos_costo;
 pub mod unidades;
 pub mod xref_detalle_proy_finan;
