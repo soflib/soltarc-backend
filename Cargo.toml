@@ -40,7 +40,7 @@ time = { version = "0.3", features = ["formatting", "parsing", "macros", "serde"
 reqwest = { version = "0.13.3", features = ["json"] }
 
 rust_xlsxwriter = "0.94.1"
-printpdf = "0.9.1"
+printpdf = { version = "0.9.1", features = ["png", "jpeg"] }
 rust-s3 = "0.37"
 
 prost = "0.14.3"

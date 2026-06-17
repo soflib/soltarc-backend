@@ -22,6 +22,7 @@ RUN mkdir src && echo "fn main() {}" > src/main.rs \
 # Layer 2: application source
 # Prerequisite: run `cargo sqlx prepare` to generate .sqlx/ before building this image
 COPY src/ src/
+COPY templates/ templates/
 RUN touch src/main.rs \
     && cargo build --release --locked
 
@@ -39,6 +40,9 @@ WORKDIR /app
 RUN mkdir -p logs && chown -R appuser:appuser /app
 
 COPY --from=builder --chown=appuser:appuser /app/target/release/core_backend ./
+# Plantillas de correo: emails.json va embebido en el binario, pero los adjuntos
+# (p.ej. templates/welcome.pdf) se leen en runtime → se copian aquí.
+COPY --from=builder --chown=appuser:appuser /app/templates ./templates
 
 USER appuser
 

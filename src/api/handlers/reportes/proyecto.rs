@@ -116,10 +116,13 @@ pub async fn carga_partidas(
                     Ok(b)  => render::xlsx_resp(b, "partidas_presupuesto.xlsx"),
                     Err(e) => render::render_err(e),
                 },
-                Some("pdf") => match render::pdf::presupuesto(q.presupuesto, &items) {
-                    Ok(b)  => render::pdf_resp(b, &format!("presupuesto_{}.pdf", q.presupuesto)),
-                    Err(e) => render::render_err(e),
-                },
+                Some("pdf") => {
+                    let logo = render::tenant_logo_bytes(&state, &auth_user).await;
+                    match render::pdf::presupuesto(q.presupuesto, &items, logo.as_deref()) {
+                        Ok(b)  => render::pdf_resp(b, &format!("presupuesto_{}.pdf", q.presupuesto)),
+                        Err(e) => render::render_err(e),
+                    }
+                }
                 _ => (StatusCode::OK, Json(json!({ "partidas": items, "total": total }))).into_response(),
             }
         }
@@ -156,17 +159,31 @@ pub async fn arbol_tareas_proyecto(
 ) -> Response {
     debug!(proyecto = q.proyecto, "GET /reportes/proyecto/arbol");
     if let Some(err) = ensure_proyecto(&state, &auth_user, q.proyecto).await { return err.into_response(); }
+    let (tenant_id, g, u, n) = match perfil(&state, &auth_user).await { Ok(p) => p, Err(e) => return e.into_response() };
 
-    match svc::arbol_tareas_proyecto(&state.postgres, q.proyecto).await {
+    // estado es un FK a cpa_catalogos (tipo=8); se resuelve a nombre server-side
+    // (el rol Reportes no puede leer /general/catalogs). Mismo patrón que el portal.
+    // La lista de proyectos va scopeada (lookup_accesibles) por consistencia.
+    let (lista_res, estados, proyectos_lk) = tokio::join!(
+        svc::arbol_tareas_proyecto(&state.postgres, q.proyecto),
+        crate::services::clients::catalogo_map(&state.postgres, crate::services::clients::CAT_ESTADO_PARTIDAS, tenant_id),
+        crate::dal::proyectos::lookup_accesibles(&state.postgres, tenant_id, g, u, n, "", None, 1000),
+    );
+    let pmap: std::collections::HashMap<i32, String> =
+        proyectos_lk.into_iter().map(|i| (i.id, i.etiqueta)).collect();
+
+    match lista_res {
         Ok(lista) => {
             info!("GET /reportes/proyecto/arbol?proyecto={} ← 200 {} registros", q.proyecto, lista.len());
             let items: Vec<Value> = lista.iter().map(|r| json!({
-                "nodo":        r.nodo,
-                "nivel":       r.nivel,
-                "descripcion": r.descripcion,
-                "estado":      r.estado,
-                "proyecto":    r.proyecto,
-                "importe":     r.importe.map(|d| d.to_string()),
+                "nodo":            r.nodo,
+                "nivel":           r.nivel,
+                "descripcion":     r.descripcion,
+                "estado":          r.estado,
+                "estado_nombre":   r.estado.and_then(|e| estados.get(&e)),
+                "proyecto":        r.proyecto,
+                "proyecto_nombre": r.proyecto.and_then(|p| pmap.get(&p)),
+                "importe":         r.importe.map(|d| d.to_string()),
             })).collect();
             let total = items.len();
             match q.format.as_deref() {
@@ -210,17 +227,36 @@ pub async fn audita_xref(
 ) -> Response {
     debug!(presupuesto = q.presupuesto, "GET /reportes/proyecto/audita-xref");
     if let Some(err) = ensure_presupuesto(&state, &auth_user, q.presupuesto).await { return err.into_response(); }
+    let (tenant_id, g, u, n) = match perfil(&state, &auth_user).await { Ok(p) => p, Err(e) => return e.into_response() };
 
-    match svc::audita_xref(&state.postgres, q.presupuesto).await {
+    // El SP de XREF es tenant-wide (trae TODOS los proyectos que referencian el
+    // presupuesto). Lo recortamos a los proyectos asignados al usuario:
+    // lookup_accesibles ya scopea por cpa_proyecto_asignaciones (nivel 1 = Admin/
+    // Finanzas ve todo). `ensure_presupuesto` solo valida por cliente, no por proyecto.
+    let (lista_res, estados, accesibles) = tokio::join!(
+        svc::audita_xref(&state.postgres, q.presupuesto),
+        crate::services::clients::catalogo_map(&state.postgres, crate::services::clients::CAT_ESTADO_PARTIDAS, tenant_id),
+        crate::dal::proyectos::lookup_accesibles(&state.postgres, tenant_id, g, u, n, "", None, 1000),
+    );
+    let pmap: std::collections::HashMap<i32, String> =
+        accesibles.iter().map(|i| (i.id, i.etiqueta.clone())).collect();
+    let ids: std::collections::HashSet<i32> =
+        accesibles.iter().map(|i| i.id).collect();
+
+    match lista_res {
         Ok(lista) => {
-            info!("GET /reportes/proyecto/audita-xref?presupuesto={} ← 200 {} registros", q.presupuesto, lista.len());
-            let items: Vec<Value> = lista.iter().map(|r| json!({
-                "nodo":        r.nodo,
-                "nivel":       r.nivel,
-                "descripcion": r.descripcion,
-                "estado":      r.estado,
-                "proyecto":    r.proyecto,
-                "importe":     r.importe.map(|d| d.to_string()),
+            info!("GET /reportes/proyecto/audita-xref?presupuesto={} ← 200 {} registros (sin filtrar)", q.presupuesto, lista.len());
+            let items: Vec<Value> = lista.iter()
+                .filter(|r| r.proyecto.map_or(false, |p| ids.contains(&p)))
+                .map(|r| json!({
+                "nodo":            r.nodo,
+                "nivel":           r.nivel,
+                "descripcion":     r.descripcion,
+                "estado":          r.estado,
+                "estado_nombre":   r.estado.and_then(|e| estados.get(&e)),
+                "proyecto":        r.proyecto,
+                "proyecto_nombre": r.proyecto.and_then(|p| pmap.get(&p)),
+                "importe":         r.importe.map(|d| d.to_string()),
             })).collect();
             let total = items.len();
             match q.format.as_deref() {
@@ -481,9 +517,12 @@ pub async fn avance_obra(
                 "egresos":  egr_items,
             }))).into_response()
         }
-        _ => match render::pdf::avance_obra(q.proyecto, &ing_items, &egr_items) {
-            Ok(b)  => render::pdf_resp(b, &format!("avance_obra_{}.pdf", q.proyecto)),
-            Err(e) => render::render_err(e),
-        },
+        _ => {
+            let logo = render::tenant_logo_bytes(&state, &auth_user).await;
+            match render::pdf::avance_obra(q.proyecto, &ing_items, &egr_items, logo.as_deref()) {
+                Ok(b)  => render::pdf_resp(b, &format!("avance_obra_{}.pdf", q.proyecto)),
+                Err(e) => render::render_err(e),
+            }
+        }
     }
 }

@@ -1,0 +1,15 @@
+{
+  "welcome": {
+    "subject": "¡Bienvenido a Soflib! / Welcome to Soflib",
+    "html": "<div style=\"font-family:sans-serif;max-width:520px;margin:0 auto;color:#333;\"><h2 style=\"color:#c5a880;\">¡Bienvenido, {{nombre}}! / Welcome, {{nombre}}!</h2><p>Tu cuenta de administrador en Soflib quedó lista. Ya puedes entrar al dashboard, crear proyectos, presupuestos y gestionar tu obra.</p><p>Your admin account on Soflib is ready. You can now sign in to the dashboard, create projects and budgets, and manage your construction.</p><p style=\"margin:24px 0;\"><a href=\"{{dashboard_url}}\" style=\"background:#c5a880;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;display:inline-block;font-weight:600;\">Entrar al dashboard / Go to dashboard</a></p><p style=\"font-size:13px;color:#888;\">O copia este enlace / Or copy this link:<br><a href=\"{{dashboard_url}}\" style=\"color:#c5a880;\">{{dashboard_url}}</a></p><hr style=\"border:none;border-top:1px solid #eee;margin:20px 0;\"><p style=\"font-size:12px;color:#aaa;\">Soflib — Arquitectura y Construcción</p></div>",
+    "attachment": "templates/welcome.pdf"
+  },
+  "support_received": {
+    "subject": "Recibimos tu reporte / We received your report — Soflib",
+    "html": "<div style=\"font-family:sans-serif;max-width:520px;margin:0 auto;color:#333;\"><h2 style=\"color:#c5a880;\">¡Recibimos tu reporte! / We got your report!</h2><p>Gracias por avisarnos. Recibimos tu reporte sobre <strong>{{asunto}}</strong> y ya estamos trabajando en ello. Te avisaremos en cuanto quede resuelto.</p><p>Thanks for letting us know. We received your report about <strong>{{asunto}}</strong> and we're already working on it. We'll let you know as soon as it's resolved.</p><hr style=\"border:none;border-top:1px solid #eee;margin:20px 0;\"><p style=\"font-size:12px;color:#aaa;\">Soflib — Soporte / Support</p></div>"
+  },
+  "contact": {
+    "subject": "Nuevo contacto desde el sitio — {{nombre}}",
+    "html": "<div style=\"font-family:sans-serif;max-width:520px;margin:0 auto;color:#333;\"><h2 style=\"color:#c5a880;\">Nuevo mensaje de contacto</h2><p style=\"color:#666;\">Recibido desde el formulario del sitio (Contáctanos).</p><table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-collapse:collapse;width:100%;max-width:520px;font-size:14px;\"><tbody><tr style=\"background:#f5f0ea;\"><td style=\"padding:10px 14px;font-weight:600;\">Nombre</td><td style=\"padding:10px 14px;\">{{nombre}}</td></tr><tr><td style=\"padding:10px 14px;font-weight:600;border-top:1px solid #eee;\">Correo</td><td style=\"padding:10px 14px;border-top:1px solid #eee;\">{{email}}</td></tr><tr><td style=\"padding:10px 14px;font-weight:600;border-top:1px solid #eee;vertical-align:top;\">Mensaje</td><td style=\"padding:10px 14px;border-top:1px solid #eee;white-space:pre-wrap;\">{{mensaje}}</td></tr></tbody></table><hr style=\"border:none;border-top:1px solid #eee;margin:20px 0;\"><p style=\"font-size:12px;color:#aaa;\">Soflib — Sitio web</p></div>"
+  }
+}

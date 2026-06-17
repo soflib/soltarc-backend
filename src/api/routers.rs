@@ -58,6 +58,8 @@ use crate::api::handlers::sistema::gn_grupos as han_gn_grupos;
 use crate::api::handlers::sistema::gn_usuarios as han_gn_usuarios;
 use crate::api::handlers::sistema::configura as han_configura;
 use crate::api::handlers::sistema::seguridad as han_seguridad;
+use crate::api::handlers::sistema::contacto as han_contacto;
+use crate::api::handlers::sistema::logo as han_logo;
 
 #[derive(OpenApi)]
 #[openapi(
@@ -299,6 +301,8 @@ use crate::api::handlers::sistema::seguridad as han_seguridad;
         crate::api::handlers::sistema::configura::carga_configuracion,
         // Sistema — Seguridad
         crate::api::handlers::sistema::seguridad::carga_variables,
+        // Sistema — Contacto (público)
+        crate::api::handlers::sistema::contacto::contacto,
     ),
     components(schemas(
         CatalogGInput,
@@ -346,6 +350,7 @@ use crate::api::handlers::sistema::seguridad as han_seguridad;
         han_gn_grupos::GnGruposInput,
         han_gn_usuarios::GnUsuariosInput,
         han_configura::ConfiguraInput,
+        han_contacto::ContactoInput,
     )),
     tags(
         (name = "Sistema",          description = "Health check"),
@@ -388,7 +393,9 @@ pub fn build_router(
     let han_auth_public = Router::new()
         .route("/auth/register",      post(identity::register))
         .route("/auth/login",         post(identity::login))
-        .route("/auth/token/refresh", post(tokens::refresh_token));
+        .route("/auth/token/refresh", post(tokens::refresh_token))
+        // Formulario público "Contáctanos" del sitio → correo vía Outlook.
+        .route("/contacto",           post(han_contacto::contacto));
 
     // ── Any authenticated user ─────────────────────────────────────────────────
     // logout, token validation, session revoke — self-service, no role required.
@@ -564,6 +571,14 @@ pub fn build_router(
     let han_configura_routes = Router::new()
         .route("/sistema/configura", put(han_configura::cambia_configuracion))
         .route("/sistema/configura", get(han_configura::carga_configuracion))
+        // Logo de la empresa por tenant (object storage). POST acepta imagen ≤2MB.
+        .route(
+            "/sistema/logo",
+            get(han_logo::obtener)
+                .post(han_logo::subir)
+                .delete(han_logo::borrar)
+                .layer(axum::extract::DefaultBodyLimit::max(4 * 1024 * 1024)),
+        )
         .route_layer(middleware::from_fn(require_arquitecto));
 
     let han_gn_grupos_routes = Router::new()
@@ -592,6 +607,7 @@ pub fn build_router(
         .route("/operaciones/proyectos/cupo",               get(han_proy::cupo))
         .route("/operaciones/proyectos/{id}",               get(han_proy::consulta))
         .route("/operaciones/proyectos/{id}",               delete(han_proy::baja))
+        .route("/operaciones/proyectos/{id}/clonar",        post(han_proy::clonar))
         .route("/operaciones/proyectos/{id}/grupo-usuario", put(han_proy::gpo_usr_proy))
         .route("/operaciones/proyectos/{id}/asignaciones",  get(han_proy::get_asignaciones))
         .route("/operaciones/proyectos/{id}/cliente",       get(han_proy::cliente_proy))

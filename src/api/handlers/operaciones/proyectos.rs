@@ -83,6 +83,14 @@ pub struct AsignacionesInput {
     pub asignaciones: Vec<AsignacionInput>,
 }
 
+/// Clonar un proyecto: `nombre` nuevo (obligatorio); `cliente` opcional
+/// (None = se mantiene el cliente del proyecto original).
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ClonarInput {
+    pub nombre:  String,
+    pub cliente: Option<i32>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct FiltroActivos {
     pub activos: Option<bool>,
@@ -187,6 +195,53 @@ pub async fn alta(
     } else {
         error!("POST /operaciones/proyectos ← 400 codigo={} msg='{}'", ret.codigo, ret.mensaje);
         (StatusCode::BAD_REQUEST, Json(json!({ "codigo": ret.codigo, "mensaje": ret.mensaje })))
+    }
+}
+
+// ─────────────────────────────────────────────
+// CLONAR — copia un proyecto completo (header + árbol WBS + asignaciones)
+// ─────────────────────────────────────────────
+#[utoipa::path(
+    post,
+    path = "/operaciones/proyectos/{id}/clonar",
+    params(("id" = i32, Path, description = "Id del proyecto a clonar")),
+    request_body = ClonarInput,
+    responses(
+        (status = 201, description = "Proyecto clonado",               body = Value),
+        (status = 400, description = "Datos inválidos o error BD",     body = Value),
+        (status = 409, description = "Tope de proyectos del plan",     body = Value),
+    ),
+    tag = "Proyectos"
+)]
+pub async fn clonar(
+    State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
+    Path(id): Path<i32>,
+    Json(body): Json<ClonarInput>,
+) -> (StatusCode, Json<Value>) {
+    let tenant_id = match auth_user.tenant_uuid() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+    let nombre = body.nombre.trim();
+    if nombre.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "mensaje": "El nombre del proyecto clonado es obligatorio." })));
+    }
+    info!("POST /operaciones/proyectos/{}/clonar → nombre='{}'", id, nombre);
+
+    match svc::clonar(&state.postgres, id, nombre, body.cliente, tenant_id).await {
+        Ok(nuevo_id) => {
+            info!("POST /operaciones/proyectos/{}/clonar ← 201 nuevo={}", id, nuevo_id);
+            (StatusCode::CREATED, Json(json!({ "afectado": nuevo_id, "mensaje": "Proyecto clonado correctamente." })))
+        }
+        Err(ret) if ret.codigo == -20 => {
+            info!("POST /operaciones/proyectos/{}/clonar ← 409 límite de plan", id);
+            (StatusCode::CONFLICT, Json(json!({ "codigo": -20, "mensaje": ret.mensaje })))
+        }
+        Err(ret) => {
+            error!("POST /operaciones/proyectos/{}/clonar ← 400 codigo={}", id, ret.codigo);
+            (StatusCode::BAD_REQUEST, Json(json!({ "codigo": ret.codigo, "mensaje": ret.mensaje })))
+        }
     }
 }
 

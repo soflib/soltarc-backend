@@ -50,6 +50,56 @@ pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<
     dal::consulta(pool, id, tenant_id).await
 }
 
+/// Clona un proyecto COMPLETO: header (con `nombre` nuevo y, opcionalmente, otro
+/// `cliente`) + todo el árbol WBS de partidas/tareas + las asignaciones grupo/usuario.
+/// Respeta el tope de proyectos del plan (el alta devuelve -20 si se excede).
+/// La copia del árbol y las asignaciones es best-effort: si falla, el proyecto ya
+/// quedó creado (se loguea). No copia finanzas ni archivos (son transaccionales).
+pub async fn clonar(
+    pool: &PgPool,
+    origen_id: i32,
+    nombre: &str,
+    cliente: Option<i32>,
+    tenant_id: Uuid,
+) -> Result<i32, ReturnCode> {
+    // 1) Proyecto origen (consulta valida que pertenezca al tenant).
+    let mut nuevo = match dal::consulta(pool, origen_id, tenant_id).await? {
+        Some(p) => p,
+        None => return Err(ReturnCode { codigo: -41, afectado: 0, mensaje: "El proyecto a clonar no existe".to_string() }),
+    };
+
+    // 2) Lo único que cambia: nombre (obligatorio) y, si se indicó, el cliente.
+    nuevo.id     = 0;
+    nuevo.nombre = nombre.to_string();
+    if let Some(c) = cliente {
+        nuevo.cliente = c;
+    }
+
+    // 3) Crear el header del clon (respeta el límite del plan → -20).
+    let ret = dal::alta(pool, &nuevo, tenant_id).await;
+    if ret.afectado <= 0 {
+        return Err(ret);
+    }
+    let nuevo_id = ret.afectado;
+
+    // 4) Copiar TODO el árbol WBS (el destino está vacío → copia todas las partidas).
+    let wbs = crate::dal::detalle_proyecto::adiciona_partidas_faltantes(pool, origen_id, nuevo_id).await;
+    if wbs.codigo < 0 {
+        tracing::warn!(origen = origen_id, nuevo = nuevo_id, codigo = wbs.codigo, "clonar: árbol WBS con error (proyecto ya creado)");
+    }
+
+    // 5) Copiar las asignaciones grupo/usuario del origen.
+    if let Ok(asigs) = dal::asignaciones_lst(pool, origen_id, tenant_id).await {
+        if !asigs.is_empty() {
+            let grupos:   Vec<i32> = asigs.iter().map(|a| a.gn_id).collect();
+            let usuarios: Vec<i32> = asigs.iter().map(|a| a.gn_usr_id).collect();
+            let _ = dal::asignaciones_set(pool, nuevo_id, tenant_id, &grupos, &usuarios).await;
+        }
+    }
+
+    Ok(nuevo_id)
+}
+
 pub async fn llena_proyectos(
     pool: &PgPool, activos: bool, tenant_id: Uuid, grupo: i32, gn_usr_id: i32, nivel: i32,
 ) -> Result<Vec<Proyectos>, ReturnCode> {

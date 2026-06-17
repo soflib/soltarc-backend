@@ -11,6 +11,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
+    Extension,
     Json,
 };
 use rust_decimal::Decimal;
@@ -19,6 +20,7 @@ use serde_json::{json, Value};
 use utoipa::ToSchema;
 use tracing::{debug, error, info};
 
+use crate::api::middleware::roles::AuthUser;
 use crate::domain::models::partidas_ppto::{PartidaBuscada, PartidasPpto};
 use crate::infrastructure::db::app_state::AppState;
 use crate::infrastructure::render;
@@ -246,6 +248,7 @@ pub async fn cambio(
 )]
 pub async fn carga_partidas(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<PartidasQuery>,
 ) -> Response {
     let Some(presupuesto) = q.presupuesto else {
@@ -275,7 +278,8 @@ pub async fn carga_partidas(
                         "calculo":  p.calculo,
                         "nivel":    p.nivel,
                     })).collect();
-                    match render::pdf::presupuesto(presupuesto, &pdf_items) {
+                    let logo = render::tenant_logo_bytes(&state, &auth_user).await;
+                    match render::pdf::presupuesto(presupuesto, &pdf_items, logo.as_deref()) {
                         Ok(b)  => render::pdf_resp(b, &format!("presupuesto_{}.pdf", presupuesto)),
                         Err(e) => render::render_err(e),
                     }

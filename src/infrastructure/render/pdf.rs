@@ -10,7 +10,7 @@
 
 use printpdf::{
     BuiltinFont, Line, LinePoint, Mm, Op, PdfDocument, PdfFontHandle, PdfPage,
-    PdfSaveOptions, Point, Pt, TextItem,
+    PdfSaveOptions, Point, Pt, RawImage, TextItem, XObjectTransform,
 };
 use serde_json::Value;
 
@@ -68,11 +68,57 @@ fn new_page(ops: Vec<Op>) -> PdfPage {
     PdfPage::new(Mm(210.0), Mm(297.0), ops)
 }
 
+/// Inserta el logo del tenant en la esquina superior derecha de la primera página.
+/// Best-effort: si no hay logo o no se decodifica, el PDF sale sin él.
+fn draw_logo(doc: &mut PdfDocument, ops: &mut Vec<Op>, logo: Option<&[u8]>) {
+    let bytes = match logo {
+        Some(b) if !b.is_empty() => b,
+        _ => return,
+    };
+    let mut warnings = Vec::new();
+    let img = match RawImage::decode_from_bytes(bytes, &mut warnings) {
+        Ok(i) => i,
+        Err(_) => return,
+    };
+    let w_px = img.width as f32;
+    let h_px = img.height as f32;
+    if w_px <= 0.0 || h_px <= 0.0 { return; }
+    let id = doc.add_image(&img);
+
+    // Tamaño objetivo: alto 14mm, ancho máx 50mm, conservando proporción.
+    let mm = 2.834_65_f32; // mm → pt
+    let mut disp_h = 14.0 * mm;
+    let mut disp_w = disp_h * (w_px / h_px);
+    let max_w = 50.0 * mm;
+    if disp_w > max_w {
+        disp_w = max_w;
+        disp_h = disp_w * (h_px / w_px);
+    }
+
+    // Esquina superior derecha (margen derecho 195mm; página de 297mm de alto).
+    let right = 195.0 * mm;
+    let top   = 290.0 * mm;
+    let scale = disp_w / w_px; // con dpi=72, 1px = 1pt
+
+    ops.push(Op::UseXobject {
+        id,
+        transform: XObjectTransform {
+            translate_x: Some(Pt(right - disp_w)),
+            translate_y: Some(Pt(top - disp_h)),
+            rotate: None,
+            scale_x: Some(scale),
+            scale_y: Some(scale),
+            dpi: Some(72.0),
+        },
+    });
+}
+
 // ── Recibo de Honorarios ──────────────────────────────────────────────────────
 
-pub fn recibo_honorarios(data: &Value) -> Result<Vec<u8>, String> {
+pub fn recibo_honorarios(data: &Value, logo: Option<&[u8]>) -> Result<Vec<u8>, String> {
     let mut doc = PdfDocument::new("Recibo de Honorarios");
     let mut ops: Vec<Op> = Vec::new();
+    draw_logo(&mut doc, &mut ops, logo);
 
     let bold = BuiltinFont::HelveticaBold;
     let reg  = BuiltinFont::Helvetica;
@@ -124,9 +170,10 @@ pub fn recibo_honorarios(data: &Value) -> Result<Vec<u8>, String> {
 
 // ── Presupuesto PDF ───────────────────────────────────────────────────────────
 
-pub fn presupuesto(presupuesto_id: i32, partidas: &[Value]) -> Result<Vec<u8>, String> {
+pub fn presupuesto(presupuesto_id: i32, partidas: &[Value], logo: Option<&[u8]>) -> Result<Vec<u8>, String> {
     let mut doc  = PdfDocument::new("Presupuesto");
     let mut ops: Vec<Op> = Vec::new();
+    draw_logo(&mut doc, &mut ops, logo);
     let mut y    = 275.0_f32;
 
     let bold = BuiltinFont::HelveticaBold;
@@ -197,9 +244,11 @@ pub fn avance_obra(
     proyecto_id: i32,
     ingresos: &[Value],
     egresos: &[Value],
+    logo: Option<&[u8]>,
 ) -> Result<Vec<u8>, String> {
     let mut doc = PdfDocument::new("Avance de Obra");
     let mut ops: Vec<Op> = Vec::new();
+    draw_logo(&mut doc, &mut ops, logo);
     let mut y   = 275.0_f32;
 
     let bold = BuiltinFont::HelveticaBold;

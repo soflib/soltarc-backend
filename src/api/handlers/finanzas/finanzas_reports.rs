@@ -326,10 +326,13 @@ pub async fn recibo_honorarios(
                 "rfc_curp":     r.rfc_curp,
             });
             match q.format.as_deref() {
-                Some("pdf") => match render::pdf::recibo_honorarios(&data) {
-                    Ok(b)  => render::pdf_resp(b, &format!("recibo_honorarios_{}.pdf", id)),
-                    Err(e) => render::render_err(e),
-                },
+                Some("pdf") => {
+                    let logo = render::tenant_logo_bytes(&state, &auth_user).await;
+                    match render::pdf::recibo_honorarios(&data, logo.as_deref()) {
+                        Ok(b)  => render::pdf_resp(b, &format!("recibo_honorarios_{}.pdf", id)),
+                        Err(e) => render::render_err(e),
+                    }
+                }
                 _ => (StatusCode::OK, Json(data)).into_response(),
             }
         }

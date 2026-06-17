@@ -70,9 +70,17 @@ pub async fn subir(
     let tenant_id = match auth_user.tenant_uuid() { Ok(t) => t, Err(e) => return e };
 
     let mut subidos: Vec<Value> = Vec::new();
+    // Área de obra; el campo de texto "area" debe llegar ANTES de los archivos.
+    let mut area = keys::AREA_DEFAULT.to_string();
 
     while let Ok(Some(field)) = multipart.next_field().await {
-        let Some(fname) = field.file_name().map(str::to_string) else { continue }; // solo campos archivo
+        let Some(fname) = field.file_name().map(str::to_string) else {
+            // campo de texto (p. ej. "area"): clasifica los archivos que siguen
+            if field.name() == Some("area") {
+                area = keys::normalize_area(&field.text().await.unwrap_or_default());
+            }
+            continue;
+        };
         let mime = field.content_type().unwrap_or("application/octet-stream").to_string();
 
         if !mime_permitido(&mime) {
@@ -94,7 +102,7 @@ pub async fn subir(
         }
 
         // 1) metadata + cuota (sp_cpa_archivo_add valida los 25GB)
-        let key = keys::tenant_proyecto_file(&tenant_id, id, &fname);
+        let key = keys::tenant_proyecto_file(&tenant_id, id, &area, &fname);
         let archivo_id = match dal::alta(
             &state.postgres, tenant_id, Some(id), &key, &fname, &mime,
             data.len() as i64, &auth_user.username,
@@ -159,6 +167,7 @@ pub async fn listar(
         let url = storage.presigned_get(&a.s3_key, PRESIGN_GALLERY_SECS).await.unwrap_or_default();
         archivos.push(json!({
             "id": a.id, "nombre": a.nombre, "mime": a.mime, "bytes": a.bytes,
+            "area": keys::area_from_key(&a.s3_key),
             "url": url, "created_at": a.created_at.to_rfc3339(),
         }));
     }
@@ -296,6 +305,20 @@ pub async fn soporte(
     let mut links: Vec<String> = Vec::new();
     for k in &keys_subidas {
         if let Ok(u) = storage.presigned_get(k, PRESIGN_SUPPORT_SECS).await { links.push(u); }
+    }
+
+    // Acuse de recibo al USUARIO que reportó (best-effort, fire-and-forget):
+    // "recibimos tu reporte y estamos trabajando en ello". Vía Outlook/Graph.
+    let acuse_to = if email.trim().is_empty() { auth_user.username.clone() } else { email.clone() };
+    if !acuse_to.trim().is_empty() {
+        let asunto_acuse = asunto.clone();
+        tokio::spawn(async move {
+            let vars = [("asunto", asunto_acuse.as_str())];
+            match crate::infrastructure::email::outlook::send_template(&acuse_to, "support_received", &vars).await {
+                Ok(_)  => info!(%acuse_to, "soporte: acuse al usuario enviado"),
+                Err(e) => warn!(%acuse_to, error = %e, "soporte: acuse al usuario falló (reporte OK)"),
+            }
+        });
     }
 
     // Notificación best-effort vía payments_backend (Outlook). No bloquea.

@@ -52,10 +52,16 @@ pub fn fotos_prefix(proyecto_id: i32) -> String {
 }
 
 // ── Multi-tenant layout (actual) ─────────────────────────────────────────────
-// Espacio del tenant (cuenta para su cuota de 25GB):
-//   t/{tenant_id}/proyectos/{proyecto_id}/{uuid}_{archivo}
+// Espacio del tenant (cuenta para su cuota de 25GB), clasificado por área de obra:
+//   {tenant_id}/proyectos/{proyecto_id}/{area}/{uuid}_{archivo}
 // Soporte (capturas de errores; FUERA del espacio/cuota del tenant):
 //   support/{tenant_id}/{timestamp}/{archivo}
+
+/// Áreas/etapas de obra válidas para clasificar los archivos de un proyecto.
+pub const AREAS_OBRA: [&str; 5] = ["terreno", "obra_negra", "obra_gris", "acabados", "final"];
+
+/// Slug usado cuando el área recibida no es válida o la key es antigua (sin área).
+pub const AREA_DEFAULT: &str = "sin_clasificar";
 
 /// Sanitiza un nombre de archivo para usarlo en una key S3 (sin '/', espacios → '_').
 pub fn sanitize_filename(name: &str) -> String {
@@ -64,16 +70,42 @@ pub fn sanitize_filename(name: &str) -> String {
         .collect()
 }
 
-/// Archivo de un proyecto dentro del espacio del tenant (uuid evita colisiones).
-pub fn tenant_proyecto_file(tenant_id: &uuid::Uuid, proyecto_id: i32, filename: &str) -> String {
+/// Normaliza el área recibida del cliente: si no es una de las válidas → AREA_DEFAULT.
+pub fn normalize_area(area: &str) -> String {
+    let a = area.trim().to_lowercase();
+    if AREAS_OBRA.contains(&a.as_str()) { a } else { AREA_DEFAULT.to_string() }
+}
+
+/// Extrae el área desde una key de proyecto:
+///   {tenant}/proyectos/{id}/{area}/{archivo}  →  {area}
+/// Keys antiguas sin segmento de área → AREA_DEFAULT.
+pub fn area_from_key(key: &str) -> String {
+    let parts: Vec<&str> = key.split('/').collect();
+    if parts.len() >= 5 && parts[1] == "proyectos" {
+        parts[3].to_string()
+    } else {
+        AREA_DEFAULT.to_string()
+    }
+}
+
+/// Archivo de un proyecto dentro del espacio del tenant, bajo un área de obra
+/// (uuid evita colisiones). `area` debe venir ya normalizada (normalize_area).
+pub fn tenant_proyecto_file(tenant_id: &uuid::Uuid, proyecto_id: i32, area: &str, filename: &str) -> String {
     let safe = sanitize_filename(filename);
     let uid = uuid::Uuid::new_v4().simple();
-    format!("t/{tenant_id}/proyectos/{proyecto_id}/{uid}_{safe}")
+    format!("{tenant_id}/proyectos/{proyecto_id}/{area}/{uid}_{safe}")
 }
 
 /// Prefijo de TODO el espacio del tenant.
 pub fn tenant_prefix(tenant_id: &uuid::Uuid) -> String {
-    format!("t/{tenant_id}/")
+    format!("{tenant_id}/")
+}
+
+/// Logo del tenant (key fija; se sobrescribe al actualizar). Se usa en la pantalla
+/// de Configuración y para insertarlo en los reportes PDF. El content-type se fija
+/// al subir, así que la key no necesita extensión.
+pub fn tenant_logo(tenant_id: &uuid::Uuid) -> String {
+    format!("{tenant_id}/config/logo")
 }
 
 /// Captura de soporte: support/{tenant}/{ts}/{archivo}.

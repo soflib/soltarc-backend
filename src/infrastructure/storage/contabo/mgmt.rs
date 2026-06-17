@@ -90,7 +90,7 @@ impl ContaboStorage {
     /// Get details for the configured object storage instance.
     pub async fn get_storage(&self) -> Result<ObjectStorageInfo, String> {
         let tok = self.bearer_token().await?;
-        let id  = &self.config.object_storage_id;
+        let id  = self.config.mgmt_creds()?.4;
         let res = self.http
             .get(format!("{MGMT_BASE}/object-storages/{id}"))
             .bearer_auth(&tok)
@@ -106,7 +106,7 @@ impl ContaboStorage {
     /// Get usage statistics for the configured object storage instance.
     pub async fn get_stats(&self) -> Result<StorageStats, String> {
         let tok = self.bearer_token().await?;
-        let id  = &self.config.object_storage_id;
+        let id  = self.config.mgmt_creds()?.4;
         let res = self.http
             .get(format!("{MGMT_BASE}/object-storages/{id}/stats"))
             .bearer_auth(&tok)

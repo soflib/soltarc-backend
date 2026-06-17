@@ -80,6 +80,10 @@ pub async fn register(
     // El plan comprado define el tope de proyectos del tenant (se guarda tras crear el tenant).
     let payment_plan = body.payment_plan.clone().unwrap_or_default();
 
+    // Datos para el correo de bienvenida (antes de mover `body` al request gRPC).
+    let admin_email = body.email.clone();
+    let admin_name  = body.full_name.clone().unwrap_or_default();
+
     let req = RegisterRequest {
         email:          body.email.clone(),
         username:       body.username,
@@ -174,6 +178,26 @@ pub async fn register(
                                 }
                                 Err(e) => warn!(tenant_id = %tid, error = %e, "sync gn_usuarios falló (registro OK)"),
                             }
+
+                            // Las asignaciones demo (cada proyecto template → usuarios demo
+                            // arquitecto/finanzas/reportes) se siembran en SQL: el trigger
+                            // trg_gn_usuarios_asigna_demo de seed_proyecto_asignaciones.sql las
+                            // crea al nacer el perfil gn_usuarios. No hay plumbing en Rust.
+
+                            // Correo de bienvenida al admin (best-effort, fire-and-forget):
+                            // si falta config de Outlook o falla el envío, el registro sigue OK.
+                            let to     = admin_email.clone();
+                            let nombre = if admin_name.is_empty() { u.username.clone() } else { admin_name.clone() };
+                            let dash   = std::env::var("DASHBOARD_URL")
+                                .ok().filter(|s| !s.trim().is_empty())
+                                .unwrap_or_else(|| "https://dashboard.soflib.com".to_string());
+                            tokio::spawn(async move {
+                                let vars = [("nombre", nombre.as_str()), ("dashboard_url", dash.as_str())];
+                                match crate::infrastructure::email::outlook::send_template(&to, "welcome", &vars).await {
+                                    Ok(_)  => info!(%to, "correo de bienvenida enviado"),
+                                    Err(e) => warn!(%to, error = %e, "correo de bienvenida falló (registro OK)"),
+                                }
+                            });
                         },
                         Err(_) => warn!(raw = %u.tenant_id, "tenant_id no parseable a UUID; seeds omitidos"),
                     }
