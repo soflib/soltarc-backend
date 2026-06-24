@@ -52,10 +52,10 @@ pub fn fotos_prefix(proyecto_id: i32) -> String {
 }
 
 // ── Multi-tenant layout (actual) ─────────────────────────────────────────────
-// Espacio del tenant (cuenta para su cuota de 25GB), clasificado por área de obra:
+// Espacio del tenant (cuenta para la cuota de su plan), clasificado por área de obra:
 //   {tenant_id}/proyectos/{proyecto_id}/{area}/{uuid}_{archivo}
-// Soporte (capturas de errores; FUERA del espacio/cuota del tenant):
-//   support/{tenant_id}/{timestamp}/{archivo}
+// Soporte (capturas de error/sugerencia; FUERA del espacio/cuota del tenant):
+//   support/{tenant_id}/{tipo}/{timestamp}/{archivo}
 
 /// Áreas/etapas de obra válidas para clasificar los archivos de un proyecto.
 pub const AREAS_OBRA: [&str; 5] = ["terreno", "obra_negra", "obra_gris", "acabados", "final"];
@@ -108,8 +108,16 @@ pub fn tenant_logo(tenant_id: &uuid::Uuid) -> String {
     format!("{tenant_id}/config/logo")
 }
 
-/// Captura de soporte: support/{tenant}/{ts}/{archivo}.
-pub fn support_file(tenant_id: &uuid::Uuid, ts: &str, filename: &str) -> String {
+/// Nombre de marca del tenant (texto plano UTF-8; key fija que se sobrescribe).
+/// Es el nombre que se muestra en el sidebar del dashboard en lugar del "SoltArc"
+/// por defecto. Si el objeto no existe → se usa el valor por defecto.
+pub fn tenant_brand_name(tenant_id: &uuid::Uuid) -> String {
+    format!("{tenant_id}/config/brand_name")
+}
+
+/// Captura de soporte: support/{tenant}/{tipo}/{ts}/{archivo}.
+/// `tipo` debe venir ya normalizado a un slug seguro (p.ej. "error" | "sugerencia").
+pub fn support_file(tenant_id: &uuid::Uuid, tipo: &str, ts: &str, filename: &str) -> String {
     let safe = sanitize_filename(filename);
-    format!("support/{tenant_id}/{ts}/{safe}")
+    format!("support/{tenant_id}/{tipo}/{ts}/{safe}")
 }

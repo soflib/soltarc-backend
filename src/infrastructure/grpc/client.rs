@@ -11,13 +11,13 @@ use crate::generated::auth::{
     ValidateRequest,       ValidateResponse,
     RevokeSessionsRequest, RevokeSessionsResponse,
     ChangePasswordRequest, ChangePasswordResponse,
+    RequestPasswordResetRequest, RequestPasswordResetResponse,
+    ConfirmPasswordResetRequest, ConfirmPasswordResetResponse,
     GetAllUsersRequest,    GetAllUsersResponse,
     GetUserRequest,        UserDetailResponse,
     DeleteUserRequest,     DeleteUserResponse,
     UpdateUserRequest,
     LockUserRequest,       LockUserResponse,
-    CheckUsernameRequest,  CheckUsernameResponse,
-    GetByUsernameRequest,
     CreateTenantRequest,   GetTenantRequest, UpdateTenantRequest,
     DeleteTenantRequest,   DeleteTenantResponse,
     ListTenantsRequest,    ListTenantsResponse, TenantResponse,
@@ -94,6 +94,16 @@ impl AuthGrpcClient {
         self.inner.change_password(req).await.map(|r| r.into_inner())
     }
 
+    // ── Password reset (forgot password) ───────────────────────────────────────
+
+    pub async fn request_password_reset(&mut self, req: RequestPasswordResetRequest) -> Result<RequestPasswordResetResponse, tonic::Status> {
+        self.inner.request_password_reset(req).await.map(|r| r.into_inner())
+    }
+
+    pub async fn confirm_password_reset(&mut self, req: ConfirmPasswordResetRequest) -> Result<ConfirmPasswordResetResponse, tonic::Status> {
+        self.inner.confirm_password_reset(req).await.map(|r| r.into_inner())
+    }
+
     // ── Users ────────────────────────────────────────────────────────────────
 
     pub async fn get_all_users(&mut self, req: GetAllUsersRequest) -> Result<GetAllUsersResponse, tonic::Status> {
@@ -114,14 +124,6 @@ impl AuthGrpcClient {
 
     pub async fn lock_user(&mut self, req: LockUserRequest) -> Result<LockUserResponse, tonic::Status> {
         self.inner.lock_user(req).await.map(|r| r.into_inner())
-    }
-
-    pub async fn check_username(&mut self, req: CheckUsernameRequest) -> Result<CheckUsernameResponse, tonic::Status> {
-        self.inner.check_username(req).await.map(|r| r.into_inner())
-    }
-
-    pub async fn get_user_by_username(&mut self, req: GetByUsernameRequest) -> Result<UserDetailResponse, tonic::Status> {
-        self.inner.get_user_by_username(req).await.map(|r| r.into_inner())
     }
 
     // ── Tenants ──────────────────────────────────────────────────────────────

@@ -153,9 +153,10 @@ pub async fn obtiene_clientes(pool: &PgPool, activos: bool, tenant_id: Uuid) -> 
 // SEED por tenant — sp_cpa_clientes_seed
 // Idempotente: re-llamarlo para el mismo tenant no duplica filas.
 // ─────────────────────────────────────────────
-pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid) -> Result<i32, sqlx::Error> {
-    sqlx::query_scalar::<_, i32>("SELECT arqeth.sp_cpa_clientes_seed($1)")
+pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid, lang: &str) -> Result<i32, sqlx::Error> {
+    sqlx::query_scalar::<_, i32>("SELECT arqeth.sp_cpa_clientes_seed($1, $2)")
         .bind(tenant_id)
+        .bind(lang)
         .fetch_one(pool)
         .await
 }

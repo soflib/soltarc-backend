@@ -4,7 +4,7 @@
 //              (infrastructure::email, la MISMA app de Azure de este backend).
 //
 // Ruta PÚBLICA (sin auth): la consume el sitio de marketing, no el dashboard.
-// El destino es CONTACT_EMAIL_ADDRESS (default contact-service@soflib.com).
+// El destino es CONTACT_EMAIL_ADDRESS (default customer-service@soltarc.com).
 
 use axum::{http::StatusCode, Json};
 use serde::Deserialize;
@@ -52,7 +52,7 @@ pub async fn contacto(Json(body): Json<ContactoInput>) -> (StatusCode, Json<Valu
     let to = std::env::var("CONTACT_EMAIL_ADDRESS")
         .ok()
         .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| "contact-service@soflib.com".to_string());
+        .unwrap_or_else(|| "customer-service@soltarc.com".to_string());
 
     let (e_nombre, e_email, e_mensaje) = (esc(&nombre), esc(&email), esc(&mensaje));
     let vars = [

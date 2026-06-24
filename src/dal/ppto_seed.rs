@@ -12,9 +12,10 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
-pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid) -> Result<i32, sqlx::Error> {
-    sqlx::query_scalar::<_, i32>("SELECT arqeth.sp_ppto_seed($1)")
+pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid, lang: &str) -> Result<i32, sqlx::Error> {
+    sqlx::query_scalar::<_, i32>("SELECT arqeth.sp_ppto_seed($1, $2)")
         .bind(tenant_id)
+        .bind(lang)
         .fetch_one(pool)
         .await
 }

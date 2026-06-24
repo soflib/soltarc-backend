@@ -18,6 +18,10 @@ service AuthService {
     // Credenciales
     rpc ChangePassword  (ChangePasswordRequest) returns (ChangePasswordResponse);
 
+    // Recuperación de contraseña ("olvidé mi contraseña" — sin sesión)
+    rpc RequestPasswordReset (RequestPasswordResetRequest) returns (RequestPasswordResetResponse);
+    rpc ConfirmPasswordReset (ConfirmPasswordResetRequest) returns (ConfirmPasswordResetResponse);
+
     // Users
     rpc GetAllUsers     (GetAllUsersRequest)    returns (GetAllUsersResponse);
     rpc GetUser         (GetUserRequest)        returns (UserDetailResponse);
@@ -109,6 +113,28 @@ message ChangePasswordRequest {
     string current_password = 2;
     string new_password     = 3;
     bool   revoke_sessions  = 4;
+}
+
+// ── Password reset ────────────────────────────────────────────────────────
+
+message RequestPasswordResetRequest {
+    string email = 1;
+}
+
+message RequestPasswordResetResponse {
+    bool   found     = 1;
+    string token     = 2;   // token CRUDO, solo para el backend (canal interno)
+    string full_name = 3;
+    string email     = 4;
+}
+
+message ConfirmPasswordResetRequest {
+    string token        = 1;
+    string new_password = 2;
+}
+
+message ConfirmPasswordResetResponse {
+    bool success = 1;
 }
 
 // ── Tenant requests ───────────────────────────────────────────────────────

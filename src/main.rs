@@ -98,8 +98,8 @@ async fn main() {
         "http://localhost:3001".parse::<HeaderValue>().unwrap(),
         "http://localhost:3000".parse::<HeaderValue>().unwrap(),
         "http://localhost:5173".parse::<HeaderValue>().unwrap(),
-        "https://dashboard.soflib.com".parse::<HeaderValue>().unwrap(),
-        "https://arch.pilot.soflib.com".parse::<HeaderValue>().unwrap(),
+        "https://dashboard.soltarc.com".parse::<HeaderValue>().unwrap(),
+        "https://soltarc.com".parse::<HeaderValue>().unwrap(),
     ];
 
     let cors = CorsLayer::new()

@@ -15,7 +15,7 @@ use utoipa::ToSchema;
 
 use crate::api::middleware::roles::AuthUser;
 use crate::infrastructure::db::app_state::AppState;
-use crate::generated::auth::{GetByUsernameRequest, UpdateUserRequest};
+use crate::generated::auth::{GetAllUsersRequest, UpdateUserRequest};
 use super::grpc_to_http;
 
 // ── Input types ───────────────────────────────────────────────────────────────
@@ -66,17 +66,17 @@ pub async fn get_user_roles(
     debug!(username = %q.username, "GET /auth/roles/user");
 
     let mut client = state.auth_grpc;
-    match client.get_user_by_username(GetByUsernameRequest { username: q.username }).await {
-        Ok(u) => {
-            if u.tenant_id != auth_user.tenant_id {
-                return (StatusCode::FORBIDDEN, Json(json!({ "error": "user not in your tenant" })));
-            }
-            (StatusCode::OK, Json(json!({
+    // username ya NO es único global → se resuelve siempre DENTRO del tenant del que llama.
+    let req = GetAllUsersRequest { limit: 1000, offset: 0, tenant_id: auth_user.tenant_id.clone() };
+    match client.get_all_users(req).await {
+        Ok(r) => match r.users.into_iter().find(|u| u.username == q.username) {
+            Some(u) => (StatusCode::OK, Json(json!({
                 "user_id":  u.user_id,
                 "username": u.username,
                 "roles":    [u.role],
-            })))
-        }
+            }))),
+            None => (StatusCode::NOT_FOUND, Json(json!({ "error": "user not found in your tenant" }))),
+        },
         Err(status) => {
             let (code, body) = grpc_to_http(status);
             (code, Json(body))
@@ -104,21 +104,23 @@ pub async fn assign_role(
 
     let mut client = state.auth_grpc;
 
-    // 1. Look up user by username
-    let user = match client.get_user_by_username(GetByUsernameRequest { username: body.username.clone() }).await {
-        Ok(u) => u,
+    // 1. Buscar el usuario por username DENTRO del tenant del que llama.
+    //    username ya NO es único global, así que la búsqueda global ya no aplica:
+    //    listamos los usuarios del tenant y filtramos. Esto además garantiza que
+    //    solo se pueda asignar rol a usuarios del propio tenant.
+    let req = GetAllUsersRequest { limit: 1000, offset: 0, tenant_id: auth_user.tenant_id.clone() };
+    let user = match client.get_all_users(req).await {
+        Ok(r) => match r.users.into_iter().find(|u| u.username == body.username) {
+            Some(u) => u,
+            None => return (StatusCode::NOT_FOUND, Json(json!({ "error": "user not found in your tenant" }))),
+        },
         Err(status) => {
             let (code, b) = grpc_to_http(status);
             return (code, Json(b));
         }
     };
 
-    // 2. Verify the user belongs to the caller's tenant
-    if user.tenant_id != auth_user.tenant_id {
-        return (StatusCode::FORBIDDEN, Json(json!({ "error": "user not in your tenant" })));
-    }
-
-    // 3. Update only the role field (empty strings = keep existing values)
+    // 2. Update only the role field (empty strings = keep existing values)
     match client.update_user(UpdateUserRequest {
         user_id:   user.user_id,
         full_name: String::new(),

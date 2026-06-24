@@ -14,7 +14,7 @@ use uuid::Uuid;
 use crate::api::middleware::roles::AuthUser;
 
 use crate::infrastructure::db::app_state::AppState;
-use crate::generated::auth::{RegisterRequest, LoginRequest, LogoutRequest, GetAllUsersRequest, GetUserRequest};
+use crate::generated::auth::{RegisterRequest, LoginRequest, LogoutRequest, GetAllUsersRequest, GetUserRequest, RequestPasswordResetRequest, ConfirmPasswordResetRequest};
 use super::grpc_to_http;
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -33,6 +33,9 @@ pub struct RegisterInput {
     pub payment_plan:   Option<String>,
     pub payment_method: Option<String>,
     pub billing_period: Option<String>,
+    /// Idioma de los datos de ejemplo/plantilla a sembrar en el alta ('es'|'en').
+    /// Lo elige el admin en el registro. Default 'es' si no viene.
+    pub seed_lang:      Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -80,6 +83,14 @@ pub async fn register(
     // El plan comprado define el tope de proyectos del tenant (se guarda tras crear el tenant).
     let payment_plan = body.payment_plan.clone().unwrap_or_default();
 
+    // Idioma elegido por el admin para los datos de ejemplo/plantilla ('es'|'en').
+    // Default 'es'. Se persiste en cpa_tenant_limites y se propaga a cada seed; el
+    // trigger de partidas (fn_cargar_plantilla_obra) lo relee desde ahí.
+    let seed_lang: &str = match body.seed_lang.as_deref() {
+        Some(s) if s.eq_ignore_ascii_case("en") => "en",
+        _ => "es",
+    };
+
     // Datos para el correo de bienvenida (antes de mover `body` al request gRPC).
     let admin_email = body.email.clone();
     let admin_name  = body.full_name.clone().unwrap_or_default();
@@ -111,41 +122,44 @@ pub async fn register(
                             // UUID del admin recién creado: atribuye a él los egresos/
                             // ingresos de ejemplo (si no parsea, queda en nil → "Sistema").
                             let admin_uid = Uuid::parse_str(&u.user_id).unwrap_or(Uuid::nil());
-                            // Tope de proyectos según el plan comprado (plan5→5, plan10→10,
-                            // plan20→20, dedicated/sin plan → ilimitado). Solo en el alta del
-                            // admin (es quien compra el plan); los sub-users no lo tocan.
-                            let max_proy = crate::dal::tenant_limite::max_for_plan(&payment_plan);
-                            match crate::dal::tenant_limite::set_limite(&state.postgres, tid, max_proy).await {
-                                Ok(_)  => info!(tenant_id = %tid, plan = %payment_plan, ?max_proy, "límite de proyectos fijado"),
-                                Err(e) => warn!(tenant_id = %tid, error = %e, "set límite proyectos falló (registro OK)"),
+                            // Topes según el plan comprado: proyectos (plan5→5, plan10→10,
+                            // plan20→20, dedicated/sin plan → ilimitado) y almacenamiento
+                            // (plan5→10GB, plan10→15GB, plan20→20GB, resto → default 25GB).
+                            // Solo en el alta del admin (es quien compra el plan); los
+                            // sub-users no los tocan.
+                            let max_proy    = crate::dal::tenant_limite::max_for_plan(&payment_plan);
+                            let max_storage = crate::dal::tenant_limite::storage_for_plan(&payment_plan);
+                            match crate::dal::tenant_limite::set_limite(&state.postgres, tid, max_proy, max_storage, Some(seed_lang)).await {
+                                Ok(_)  => info!(tenant_id = %tid, plan = %payment_plan, ?max_proy, ?max_storage, "límites de tenant fijados"),
+                                Err(e) => warn!(tenant_id = %tid, error = %e, "set límites tenant falló (registro OK)"),
                             }
                             // Orden importa: catálogos primero (proveedor referencia tipo/giro
                             // por FK de cpa_catalogos), luego proveedores y centros de costo.
-                            match crate::dal::catalog_g::seed_for_tenant(&state.postgres, tid).await {
+                            match crate::dal::catalog_g::seed_for_tenant(&state.postgres, tid, seed_lang).await {
                                 Ok(n)  => info!(tenant_id = %tid, rows = n, "seed catalogos cargado"),
                                 Err(e) => warn!(tenant_id = %tid, error = %e, "seed catalogos falló (registro OK)"),
                             }
                             // Grupos de negocio (5 default). Sin dependencias; va temprano.
-                            match crate::dal::gn_grupos::seed_for_tenant(&state.postgres, tid).await {
+                            match crate::dal::gn_grupos::seed_for_tenant(&state.postgres, tid, seed_lang).await {
                                 Ok(n)  => info!(tenant_id = %tid, rows = n, "seed grupos_negocio cargado"),
                                 Err(e) => warn!(tenant_id = %tid, error = %e, "seed grupos_negocio falló (registro OK)"),
                             }
-                            match crate::dal::proveedores::seed_for_tenant(&state.postgres, tid).await {
+                            match crate::dal::proveedores::seed_for_tenant(&state.postgres, tid, seed_lang).await {
                                 Ok(n)  => info!(tenant_id = %tid, rows = n, "seed proveedores cargado"),
                                 Err(e) => warn!(tenant_id = %tid, error = %e, "seed proveedores falló (registro OK)"),
                             }
-                            match crate::dal::centros_costo::seed_for_tenant(&state.postgres, tid).await {
+                            match crate::dal::centros_costo::seed_for_tenant(&state.postgres, tid, seed_lang).await {
                                 Ok(n)  => info!(tenant_id = %tid, rows = n, "seed centros_costo cargado"),
                                 Err(e) => warn!(tenant_id = %tid, error = %e, "seed centros_costo falló (registro OK)"),
                             }
-                            match crate::dal::clientes::seed_for_tenant(&state.postgres, tid).await {
+                            match crate::dal::clientes::seed_for_tenant(&state.postgres, tid, seed_lang).await {
                                 Ok(n)  => info!(tenant_id = %tid, rows = n, "seed clientes cargado"),
                                 Err(e) => warn!(tenant_id = %tid, error = %e, "seed clientes falló (registro OK)"),
                             }
                             // Presupuestos: catálogos (tipos de costo, unidades, costos
                             // estimados) + 1 presupuesto demo con partidas. Va después de
                             // clientes porque el presupuesto demo se cuelga de "Cliente 1".
-                            match crate::dal::ppto_seed::seed_for_tenant(&state.postgres, tid).await {
+                            match crate::dal::ppto_seed::seed_for_tenant(&state.postgres, tid, seed_lang).await {
                                 Ok(n)  => info!(tenant_id = %tid, rows = n, "seed presupuestos cargado"),
                                 Err(e) => warn!(tenant_id = %tid, error = %e, "seed presupuestos falló (registro OK)"),
                             }
@@ -156,11 +170,11 @@ pub async fn register(
                                 Ok(n)  => info!(tenant_id = %tid, rows = n, "seed saldos_banco cargado"),
                                 Err(e) => warn!(tenant_id = %tid, error = %e, "seed saldos_banco falló (registro OK)"),
                             }
-                            match crate::dal::egresos::seed_for_tenant(&state.postgres, tid, admin_uid).await {
+                            match crate::dal::egresos::seed_for_tenant(&state.postgres, tid, admin_uid, seed_lang).await {
                                 Ok(n)  => info!(tenant_id = %tid, rows = n, "seed egresos cargado"),
                                 Err(e) => warn!(tenant_id = %tid, error = %e, "seed egresos falló (registro OK)"),
                             }
-                            match crate::dal::ingresos::seed_for_tenant(&state.postgres, tid, admin_uid).await {
+                            match crate::dal::ingresos::seed_for_tenant(&state.postgres, tid, admin_uid, seed_lang).await {
                                 Ok(n)  => info!(tenant_id = %tid, rows = n, "seed ingresos cargado"),
                                 Err(e) => warn!(tenant_id = %tid, error = %e, "seed ingresos falló (registro OK)"),
                             }
@@ -267,6 +281,8 @@ pub async fn upgrade_plan(
             crate::dal::tenant_limite::max_for_plan(&body.payment_plan),
         _ => return (StatusCode::BAD_REQUEST, Json(json!({ "mensaje": "Plan desconocido." }))),
     };
+    // Cuota de almacenamiento del nuevo plan (plan5→10GB, plan10→15GB, plan20→20GB).
+    let new_storage = crate::dal::tenant_limite::storage_for_plan(&body.payment_plan);
 
     // Solo UPGRADE: el nuevo tope debe ser mayor al actual (None = ilimitado, ya es el máximo).
     let (usados, current_max) = match crate::dal::proyectos::cupo(&state.postgres, tenant_id).await {
@@ -281,13 +297,13 @@ pub async fn upgrade_plan(
         _ => {}
     }
 
-    if let Err(e) = crate::dal::tenant_limite::set_limite(&state.postgres, tenant_id, new_max).await {
+    if let Err(e) = crate::dal::tenant_limite::set_limite(&state.postgres, tenant_id, new_max, new_storage, None).await {
         warn!(tenant_id = %tenant_id, error = %e, "upgrade de plan: set límite falló");
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "mensaje": "No se pudo actualizar el plan." })));
     }
 
     info!(
-        tenant_id = %tenant_id, plan = %body.payment_plan, ?new_max,
+        tenant_id = %tenant_id, plan = %body.payment_plan, ?new_max, ?new_storage,
         payment_id = %body.payment_id.as_deref().unwrap_or("-"),
         billing = %body.billing_period.as_deref().unwrap_or("-"),
         "plan actualizado (upgrade)"
@@ -428,5 +444,107 @@ pub async fn me(
             "roles":     [auth_user.role],
             "tenant_id": auth_user.tenant_id,
         }))),
+    }
+}
+
+// ── Forgot password ────────────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ForgotPasswordInput {
+    pub email: String,
+}
+
+/// Mensaje de confirmación cuando el correo SÍ está registrado y se envió el enlace.
+const FORGOT_SENT_MSG: &str =
+    "Te enviamos un enlace a tu correo para restablecer tu contraseña.";
+
+#[utoipa::path(
+    post,
+    path = "/auth/forgot-password",
+    request_body = ForgotPasswordInput,
+    responses(
+        (status = 200, description = "Respuesta genérica (siempre 200)", body = Value),
+    ),
+    tag = "Auth"
+)]
+pub async fn forgot_password(
+    State(state): State<AppState>,
+    Json(body): Json<ForgotPasswordInput>,
+) -> (StatusCode, Json<Value>) {
+    debug!(email = %body.email, "POST /auth/forgot-password");
+
+    let mut client = state.auth_grpc.clone();
+    match client.request_password_reset(RequestPasswordResetRequest { email: body.email.clone() }).await {
+        // Cuenta registrada (y activa): se manda el correo y se confirma al usuario.
+        Ok(r) if r.found && !r.token.is_empty() => {
+            let dash = std::env::var("DASHBOARD_URL")
+                .ok().filter(|s| !s.trim().is_empty())
+                .unwrap_or_else(|| "https://dashboard.soflib.com".to_string());
+            let reset_link = format!("{}/reset-password?token={}", dash.trim_end_matches('/'), r.token);
+            let to     = if r.email.trim().is_empty() { body.email.clone() } else { r.email.clone() };
+            let nombre = if r.full_name.trim().is_empty() { to.clone() } else { r.full_name.clone() };
+            tokio::spawn(async move {
+                let vars = [("nombre", nombre.as_str()), ("reset_link", reset_link.as_str())];
+                match crate::infrastructure::email::outlook::send_template(&to, "password_reset", &vars).await {
+                    Ok(_)  => info!(%to, "correo de recuperación enviado"),
+                    Err(e) => warn!(%to, error = %e, "correo de recuperación falló"),
+                }
+            });
+            (StatusCode::OK, Json(json!({ "found": true, "message": FORGOT_SENT_MSG })))
+        }
+        // No hay cuenta registrada (o no está activa) con ese correo → 404 para que el
+        // front muestre "correo no registrado".
+        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({
+            "error": "No hay una cuenta registrada con ese correo."
+        }))),
+        // Error de transporte/servidor con medusa.
+        Err(status) => {
+            warn!(error = %status, "request_password_reset gRPC error");
+            (StatusCode::BAD_GATEWAY, Json(json!({
+                "error": "No se pudo procesar la solicitud. Inténtalo de nuevo."
+            })))
+        }
+    }
+}
+
+// ── Reset password ─────────────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ResetPasswordInput {
+    pub token:        String,
+    pub new_password: String,
+}
+
+#[utoipa::path(
+    post,
+    path = "/auth/reset-password",
+    request_body = ResetPasswordInput,
+    responses(
+        (status = 200, description = "Contraseña actualizada", body = Value),
+        (status = 400, description = "Token inválido o expirado", body = Value),
+    ),
+    tag = "Auth"
+)]
+pub async fn reset_password(
+    State(state): State<AppState>,
+    Json(body): Json<ResetPasswordInput>,
+) -> (StatusCode, Json<Value>) {
+    debug!("POST /auth/reset-password");
+
+    let mut client = state.auth_grpc.clone();
+    match client.confirm_password_reset(ConfirmPasswordResetRequest {
+        token:        body.token,
+        new_password: body.new_password,
+    }).await {
+        Ok(_) => (StatusCode::OK, Json(json!({
+            "message": "Contraseña actualizada. Ya puedes iniciar sesión."
+        }))),
+        // Token inválido/expirado o contraseña débil → SIEMPRE 400 (no 401): un 401
+        // haría que el interceptor del dashboard intente refrescar/expulsar en vez de
+        // mostrar "enlace inválido". Conservamos el mensaje del gRPC.
+        Err(status) => {
+            let (_code, body) = grpc_to_http(status);
+            (StatusCode::BAD_REQUEST, Json(body))
+        }
     }
 }

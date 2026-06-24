@@ -6,7 +6,7 @@
 //   POST   /operaciones/proyectos/{id}/archivos → subir   (multipart, ≤200MB c/u)
 //   GET    /operaciones/proyectos/{id}/archivos → listar  (metadata + URL presignada 1h)
 //   DELETE /operaciones/archivos/{id}           → borrar  (bucket + metadata)
-//   GET    /operaciones/storage/uso             → uso     (bytes usados vs cuota 25GB)
+//   GET    /operaciones/storage/uso             → uso     (bytes usados vs cuota del plan)
 //   POST   /sistema/soporte                     → soporte (imágenes ≤5MB → support/)
 //
 // La cuota se valida en sp_cpa_archivo_add (−30 = llena → 409). Si Contabo no
@@ -54,7 +54,7 @@ fn mime_permitido(mime: &str) -> bool {
     responses(
         (status = 201, description = "Archivos subidos",                       body = Value),
         (status = 400, description = "Tipo o tamaño de archivo no permitido",  body = Value),
-        (status = 409, description = "Cuota de almacenamiento llena (25GB)",   body = Value),
+        (status = 409, description = "Cuota de almacenamiento llena (según plan)", body = Value),
         (status = 503, description = "Almacenamiento no configurado",          body = Value),
     ),
     tag = "Archivos"
@@ -101,7 +101,7 @@ pub async fn subir(
             })));
         }
 
-        // 1) metadata + cuota (sp_cpa_archivo_add valida los 25GB)
+        // 1) metadata + cuota (sp_cpa_archivo_add valida la cuota del plan)
         let key = keys::tenant_proyecto_file(&tenant_id, id, &area, &fname);
         let archivo_id = match dal::alta(
             &state.postgres, tenant_id, Some(id), &key, &fname, &mime,
@@ -112,7 +112,7 @@ pub async fn subir(
                 info!("POST archivos ← 409 cuota llena tenant={}", tenant_id);
                 return (StatusCode::CONFLICT, Json(json!({
                     "codigo": -30,
-                    "mensaje": "Espacio de almacenamiento lleno (25GB). Libera espacio o contáctanos.",
+                    "mensaje": "Espacio de almacenamiento lleno. Libera espacio o amplía tu plan.",
                     "subidos": subidos,
                 })));
             }
@@ -231,10 +231,12 @@ pub async fn uso(
 }
 
 // ─────────────────────────────────────────────
-// SOPORTE — capturas de errores → support/{tenant}/{ts}/
+// SOPORTE — reportes de error y sugerencias de funcionalidad (campo `tipo`),
+//           con capturas → support/{tenant}/{ts}/
 //   No cuenta para la cuota del tenant ni se registra en cpa_tenant_archivos.
-//   Tras subir, notifica por correo (payments_backend) con links presignados
-//   de 7 días — best-effort, nunca bloquea la respuesta.
+//   Tras subir, manda dos correos vía Outlook propio (Graph): acuse al usuario y
+//   aviso al equipo (plantilla support_notify), con links presignados de 7 días —
+//   best-effort, nunca bloquea la respuesta.
 // ─────────────────────────────────────────────
 #[utoipa::path(
     post,
@@ -254,12 +256,18 @@ pub async fn soporte(
     let storage = match storage_or_503(&state) { Ok(s) => s, Err(e) => return e };
     let tenant_id = match auth_user.tenant_uuid() { Ok(t) => t, Err(e) => return e };
 
-    let ts = chrono::Utc::now().format("%Y%m%d-%H%M%S").to_string();
+    let now = chrono::Utc::now();
+    let ts = now.format("%Y%m%d-%H%M%S").to_string();
+    let fecha_iso = now.to_rfc3339(); // fecha legible para el metadata.json
+    let mut tipo = String::from("error"); // "error" | "sugerencia" (default error por compat)
     let mut asunto = String::new();
     let mut descripcion = String::new();
     let mut severidad = String::from("media");
     let mut email = String::new();
-    let mut keys_subidas: Vec<String> = Vec::new();
+    // Las imágenes se acumulan en memoria y se suben DESPUÉS del loop, cuando
+    // `tipo` ya se leyó con certeza — así la carpeta no depende del orden en que
+    // lleguen los campos del multipart.
+    let mut imagenes = Vec::new(); // (filename, mime, bytes)
 
     while let Ok(Some(field)) = multipart.next_field().await {
         let name = field.name().unwrap_or_default().to_string();
@@ -276,18 +284,14 @@ pub async fn soporte(
             if data.len() > MAX_SUPPORT_IMG_BYTES {
                 return (StatusCode::BAD_REQUEST, Json(json!({ "mensaje": format!("'{fname}' excede 5MB.") })));
             }
-            if keys_subidas.len() >= MAX_SUPPORT_IMGS {
+            if imagenes.len() >= MAX_SUPPORT_IMGS {
                 continue; // ignora extras silenciosamente (el form ya limita a 5)
             }
-            let key = keys::support_file(&tenant_id, &ts, &fname);
-            if let Err(e) = storage.upload(&key, &data, &mime).await {
-                error!("POST /sistema/soporte ← S3 upload falló: {}", e);
-                return (StatusCode::BAD_GATEWAY, Json(json!({ "mensaje": "No se pudieron subir las capturas." })));
-            }
-            keys_subidas.push(key);
+            imagenes.push((fname, mime, data));
         } else {
             let val = field.text().await.unwrap_or_default();
             match name.as_str() {
+                "tipo"        => tipo = val,
                 "asunto"      => asunto = val,
                 "descripcion" => descripcion = val,
                 "severidad"   => severidad = val,
@@ -299,6 +303,54 @@ pub async fn soporte(
 
     if asunto.trim().is_empty() || descripcion.trim().is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({ "mensaje": "Asunto y descripción son requeridos." })));
+    }
+
+    // Normaliza el tipo a un slug seguro (whitelist) para la key y el correo.
+    let es_sugerencia = tipo.eq_ignore_ascii_case("sugerencia");
+    let tipo_slug = if es_sugerencia { "sugerencia" } else { "error" };
+
+    // Ya con el tipo conocido, sube cada captura a:
+    //   support/{tenant}/{tipo}/{ts}/{archivo}
+    let mut keys_subidas: Vec<String> = Vec::new();
+    let mut capturas: Vec<String> = Vec::new(); // nombres de archivo subidos, para el metadata.json
+    for (i, (fname, mime, data)) in imagenes.iter().enumerate() {
+        // Prefijo de índice (1_, 2_, …) para que dos imágenes con el mismo nombre
+        // en un mismo reporte no compartan key y se sobrescriban.
+        let numbered = format!("{}_{}", i + 1, fname);
+        let key = keys::support_file(&tenant_id, tipo_slug, &ts, &numbered);
+        if let Err(e) = storage.upload(&key, data, mime).await {
+            error!("POST /sistema/soporte ← S3 upload falló: {}", e);
+            return (StatusCode::BAD_GATEWAY, Json(json!({ "mensaje": "No se pudieron subir las capturas." })));
+        }
+        capturas.push(numbered);
+        keys_subidas.push(key);
+    }
+
+    // Guarda un metadata.json en la MISMA carpeta del reporte, para saber qué
+    // comentó el usuario aunque sólo se miren las imágenes en el bucket.
+    //   support/{tenant}/{tipo}/{ts}/metadata.json
+    let metadata = json!({
+        "usuario":   auth_user.username,
+        "email":     if email.trim().is_empty() { auth_user.username.clone() } else { email.clone() },
+        "tenant_id": tenant_id.to_string(),
+        "tipo":      tipo_slug,
+        "severidad": if es_sugerencia { Value::Null } else { json!(severidad) },
+        "titulo":    asunto,
+        "mensaje":   descripcion,
+        "fecha":     fecha_iso,
+        "capturas":  capturas,
+    });
+    let meta_key = keys::support_file(&tenant_id, tipo_slug, &ts, "metadata.json");
+    match serde_json::to_vec_pretty(&metadata) {
+        Ok(bytes) => {
+            // Nota: NO se agrega a `keys_subidas` — esa lista alimenta los links de
+            // capturas del correo y el conteo `imagenes` de la respuesta.
+            if let Err(e) = storage.upload(&meta_key, &bytes, "application/json").await {
+                // No-fatal: las imágenes ya están y el correo lleva el texto completo.
+                warn!("POST /sistema/soporte ← metadata.json no se pudo subir: {}", e);
+            }
+        }
+        Err(e) => warn!("POST /sistema/soporte ← metadata.json no serializó: {}", e),
     }
 
     // Links presignados (7 días) para el correo de soporte.
@@ -321,26 +373,50 @@ pub async fn soporte(
         });
     }
 
-    // Notificación best-effort vía payments_backend (Outlook). No bloquea.
-    if let Ok(endpoint) = std::env::var("SUPPORT_NOTIFY_ENDPOINT") {
-        let payload = json!({
-            "asunto":      asunto,
-            "descripcion": descripcion,
-            "severidad":   severidad,
-            "email":       if email.is_empty() { auth_user.username.clone() } else { email.clone() },
-            "tenant_id":   tenant_id.to_string(),
-            "usuario":     auth_user.username,
-            "links":       links,
-        });
+    // Aviso al equipo de soporte, directo vía nuestro Outlook (mismo Graph que el
+    // acuse y la bienvenida; sin rodeo por payments_backend). Fire-and-forget.
+    // El asunto se etiqueta con el tipo para distinguir errores de sugerencias.
+    let asunto_etiquetado = if es_sugerencia {
+        format!("[Sugerencia] {asunto}")
+    } else {
+        format!("[Error] {asunto}")
+    };
+    let links_html = if links.is_empty() {
+        "<li>(sin capturas)</li>".to_string()
+    } else {
+        links.iter().enumerate()
+            .map(|(i, u)| format!("<li><a href=\"{u}\">Captura {}</a></li>", i + 1))
+            .collect::<Vec<_>>()
+            .join("")
+    };
+    let reportado_por = if email.trim().is_empty() { auth_user.username.clone() } else { email.clone() };
+    let usuario       = auth_user.username.clone();
+    let tenant_str    = tenant_id.to_string();
+    let descripcion_n = descripcion.clone();
+    let severidad_n   = severidad.clone();
+    // Destinatario: SUPPORT_NOTIFY_TO si está; por defecto, el propio buzón de Outlook.
+    let destino = std::env::var("SUPPORT_NOTIFY_TO")
+        .ok().filter(|s| !s.trim().is_empty())
+        .or_else(|| std::env::var("OUTLOOK_EMAIL_ADDRESS").ok())
+        .unwrap_or_default();
+    if destino.trim().is_empty() {
+        warn!("soporte: sin destinatario de aviso (OUTLOOK_EMAIL_ADDRESS) — reporte guardado sin correo al equipo");
+    } else {
         tokio::spawn(async move {
-            match reqwest::Client::new().post(&endpoint).json(&payload).send().await {
-                Ok(r) if r.status().is_success() => info!("soporte: notificación enviada"),
-                Ok(r)  => warn!(status = %r.status(), "soporte: notificación rechazada"),
-                Err(e) => warn!(error = %e, "soporte: notificación falló"),
+            let vars = [
+                ("asunto",      asunto_etiquetado.as_str()),
+                ("descripcion", descripcion_n.as_str()),
+                ("severidad",   severidad_n.as_str()),
+                ("usuario",     usuario.as_str()),
+                ("email",       reportado_por.as_str()),
+                ("tenant_id",   tenant_str.as_str()),
+                ("links",       links_html.as_str()),
+            ];
+            match crate::infrastructure::email::outlook::send_template(&destino, "support_notify", &vars).await {
+                Ok(_)  => info!("soporte: notificación al equipo enviada"),
+                Err(e) => warn!(error = %e, "soporte: notificación al equipo falló (reporte OK)"),
             }
         });
-    } else {
-        warn!("SUPPORT_NOTIFY_ENDPOINT no configurado — reporte guardado sin correo");
     }
 
     info!("POST /sistema/soporte ← 200 tenant={} imgs={}", tenant_id, keys_subidas.len());

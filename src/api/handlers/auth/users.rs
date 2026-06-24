@@ -21,7 +21,7 @@ use crate::api::middleware::roles::AuthUser;
 use crate::infrastructure::db::app_state::AppState;
 use crate::generated::auth::{
     GetAllUsersRequest, GetUserRequest, DeleteUserRequest,
-    UpdateUserRequest, LockUserRequest, CheckUsernameRequest,
+    UpdateUserRequest, LockUserRequest,
     RegisterRequest,
 };
 use super::grpc_to_http;
@@ -176,14 +176,25 @@ pub async fn create_user(
 )]
 pub async fn check_username(
     State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
     Query(q): Query<CheckUsernameQuery>,
 ) -> (StatusCode, Json<Value>) {
     debug!(username = %q.username, "GET /auth/users/check");
 
-    let req = CheckUsernameRequest { username: q.username };
+    if auth_user.tenant_id.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "caller has no tenant" })));
+    }
+
+    // username solo es único POR TENANT → la disponibilidad se evalúa dentro del
+    // tenant del que llama (alta de sub-usuarios). Otros tenants pueden tener el
+    // mismo username sin que cuente como "tomado" aquí.
+    let req = GetAllUsersRequest { limit: 1000, offset: 0, tenant_id: auth_user.tenant_id };
     let mut client = state.auth_grpc;
-    match client.check_username(req).await {
-        Ok(r) => (StatusCode::OK, Json(json!({ "available": r.available }))),
+    match client.get_all_users(req).await {
+        Ok(r) => {
+            let available = !r.users.iter().any(|u| u.username == q.username);
+            (StatusCode::OK, Json(json!({ "available": available })))
+        }
         Err(status) => {
             let (code, body) = grpc_to_http(status);
             (code, Json(body))

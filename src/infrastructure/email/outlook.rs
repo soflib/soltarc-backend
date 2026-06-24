@@ -100,7 +100,7 @@ fn base64_encode(data: &[u8]) -> String {
 }
 
 /// Envía a `to` la plantilla `clave` del JSON, sustituyendo `vars` (`{{k}}` → valor).
-/// Fija un nombre de remitente legible (`OUTLOOK_SENDER_NAME`, default "Soflib") y
+/// Fija un nombre de remitente legible (`OUTLOOK_SENDER_NAME`, default "SoltArc") y
 /// adjunta el archivo declarado en la plantilla (`attachment`) si se puede leer.
 pub async fn send_template(to: &str, clave: &str, vars: &[(&str, &str)]) -> Result<(), String> {
     let cfg = OutlookCfg::from_env()?;
@@ -109,7 +109,7 @@ pub async fn send_template(to: &str, clave: &str, vars: &[(&str, &str)]) -> Resu
     let html    = templates::render(&tpl.html, vars);
     let sender_name = std::env::var("OUTLOOK_SENDER_NAME")
         .ok().filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| "Soflib".to_string());
+        .unwrap_or_else(|| "SoltArc".to_string());
 
     let mut message = json!({
         "subject": subject,

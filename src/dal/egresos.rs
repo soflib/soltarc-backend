@@ -197,10 +197,11 @@ pub async fn search(pool: &PgPool, f: &EgresosFilter, tenant_id: Uuid) -> Result
 // SEED por tenant — sp_cpa_egresos_seed
 // Idempotente: re-llamarlo para el mismo tenant no duplica filas.
 // ─────────────────────────────────────────────
-pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid, usuario: Uuid) -> Result<i32, sqlx::Error> {
-    sqlx::query_scalar::<_, i32>("SELECT arqeth.sp_cpa_egresos_seed($1, $2)")
+pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid, usuario: Uuid, lang: &str) -> Result<i32, sqlx::Error> {
+    sqlx::query_scalar::<_, i32>("SELECT arqeth.sp_cpa_egresos_seed($1, $2, $3)")
         .bind(tenant_id)
         .bind(usuario)
+        .bind(lang)
         .fetch_one(pool)
         .await
 }

@@ -56,8 +56,10 @@ use crate::api::handlers::reportes::financieros as han_rep_fin;
 use crate::api::handlers::reportes::proyecto as han_rep_proy;
 use crate::api::handlers::sistema::gn_grupos as han_gn_grupos;
 use crate::api::handlers::sistema::gn_usuarios as han_gn_usuarios;
+use crate::api::handlers::sistema::branding as han_branding;
 use crate::api::handlers::sistema::configura as han_configura;
 use crate::api::handlers::sistema::seguridad as han_seguridad;
+use crate::api::handlers::sistema::noticias as han_noticias;
 use crate::api::handlers::sistema::contacto as han_contacto;
 use crate::api::handlers::sistema::logo as han_logo;
 
@@ -391,9 +393,12 @@ pub fn build_router(
         .route("/health", get(health));
 
     let han_auth_public = Router::new()
-        .route("/auth/register",      post(identity::register))
-        .route("/auth/login",         post(identity::login))
-        .route("/auth/token/refresh", post(tokens::refresh_token))
+        .route("/auth/register",        post(identity::register))
+        .route("/auth/login",           post(identity::login))
+        .route("/auth/token/refresh",   post(tokens::refresh_token))
+        // Recuperación de contraseña (sin sesión): pedir enlace + fijar nueva.
+        .route("/auth/forgot-password", post(identity::forgot_password))
+        .route("/auth/reset-password",  post(identity::reset_password))
         // Formulario público "Contáctanos" del sitio → correo vía Outlook.
         .route("/contacto",           post(han_contacto::contacto));
 
@@ -406,6 +411,10 @@ pub fn build_router(
         .route("/auth/logout",          post(identity::logout))
         .route("/auth/token/validate",  post(tokens::validate_token))
         .route("/auth/sessions/revoke", post(sessions::revoke_sessions))
+        // Marca del tenant (nombre + logo) para el sidebar — solo lectura, cualquier rol.
+        .route("/sistema/branding",     get(han_branding::obtener))
+        // Noticias / próximos cambios del producto (lista global) — solo lectura, cualquier rol.
+        .route("/sistema/noticias",     get(han_noticias::listar))
         // Reporte de soporte con capturas (5×5MB) → support/ en Contabo.
         .route(
             "/sistema/soporte",
@@ -571,6 +580,8 @@ pub fn build_router(
     let han_configura_routes = Router::new()
         .route("/sistema/configura", put(han_configura::cambia_configuracion))
         .route("/sistema/configura", get(han_configura::carga_configuracion))
+        // Nombre de marca del tenant (object storage). Escritura solo Admin/Arquitecto.
+        .route("/sistema/nombre", put(han_branding::guardar_nombre))
         // Logo de la empresa por tenant (object storage). POST acepta imagen ≤2MB.
         .route(
             "/sistema/logo",
