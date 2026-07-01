@@ -21,7 +21,7 @@ use uuid::Uuid;
 // ─────────────────────────────────────────────
 pub async fn alta(pool: &PgPool, ing: &Ingresos, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_IngresosAdd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"
+        "SELECT soltarc.sp_cpa_IngresosAdd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"
     )
     .bind(ing.fecha)          // $1  p_fecha
     .bind(ing.banco)          // $2  p_banco
@@ -51,7 +51,7 @@ pub async fn alta(pool: &PgPool, ing: &Ingresos, tenant_id: Uuid) -> ReturnCode 
 // ─────────────────────────────────────────────
 pub async fn baja(pool: &PgPool, ingreso: i32, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_as::<_, ReturnCode>(
-        "SELECT codigo, mensaje, afectado FROM arqeth.sp_cpa_IngresosDel($1, $2)"
+        "SELECT codigo, mensaje, afectado FROM soltarc.sp_cpa_IngresosDel($1, $2)"
     )
     .bind(ingreso)
     .bind(tenant_id)
@@ -70,7 +70,7 @@ pub async fn baja(pool: &PgPool, ingreso: i32, tenant_id: Uuid) -> ReturnCode {
 // ─────────────────────────────────────────────
 pub async fn cambios(pool: &PgPool, ing: &Ingresos, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_IngresosUpd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)"
+        "SELECT soltarc.sp_cpa_IngresosUpd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)"
     )
     .bind(ing.id.unwrap_or(0))  // $1  p_id
     .bind(ing.fecha)            // $2  p_fecha
@@ -100,7 +100,7 @@ pub async fn cambios(pool: &PgPool, ing: &Ingresos, tenant_id: Uuid) -> ReturnCo
 // ─────────────────────────────────────────────
 pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<Ingresos>, ReturnCode> {
     let result = sqlx::query_as::<_, Ingresos>(
-        "SELECT * FROM arqeth.sp_cpa_IngresosQry($1, $2)"
+        "SELECT * FROM soltarc.sp_cpa_IngresosQry($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -119,7 +119,7 @@ pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<
 // ─────────────────────────────────────────────
 pub async fn lista(pool: &PgPool, proyecto: Option<i32>, cliente: Option<i32>, tenant_id: Uuid) -> Result<Vec<Ingresos>, ReturnCode> {
     let result = sqlx::query_as::<_, Ingresos>(
-        "SELECT * FROM arqeth.sp_cpa_ingresos_lstact($1, $2, $3)"
+        "SELECT * FROM soltarc.sp_cpa_ingresos_lstact($1, $2, $3)"
     )
     .bind(proyecto)
     .bind(cliente)
@@ -140,7 +140,7 @@ pub async fn lista(pool: &PgPool, proyecto: Option<i32>, cliente: Option<i32>, t
 // ─────────────────────────────────────────────
 pub async fn search(pool: &PgPool, f: &IngresosFilter, tenant_id: Uuid) -> Result<PageOf<Ingresos>, ReturnCode> {
     let rows = sqlx::query_as::<_, IngresoConTotal>(
-        "SELECT * FROM arqeth.sp_cpa_ingresos_search($1, $2, $3, $4, $5, $6, $7, $8)"
+        "SELECT * FROM soltarc.sp_cpa_ingresos_search($1, $2, $3, $4, $5, $6, $7, $8)"
     )
     .bind(f.proyecto)
     .bind(f.cliente)
@@ -170,7 +170,7 @@ pub async fn search(pool: &PgPool, f: &IngresosFilter, tenant_id: Uuid) -> Resul
 // Idempotente: re-llamarlo para el mismo tenant no duplica filas.
 // ─────────────────────────────────────────────
 pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid, usuario: Uuid, lang: &str) -> Result<i32, sqlx::Error> {
-    sqlx::query_scalar::<_, i32>("SELECT arqeth.sp_cpa_ingresos_seed($1, $2, $3)")
+    sqlx::query_scalar::<_, i32>("SELECT soltarc.sp_cpa_ingresos_seed($1, $2, $3)")
         .bind(tenant_id)
         .bind(usuario)
         .bind(lang)

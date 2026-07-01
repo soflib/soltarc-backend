@@ -38,7 +38,7 @@ pub async fn alta(
     subido_por: &str,
 ) -> Result<i32, ReturnCode> {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_archivo_add($1, $2, $3, $4, $5, $6, $7)"
+        "SELECT soltarc.sp_cpa_archivo_add($1, $2, $3, $4, $5, $6, $7)"
     )
     .bind(tenant_id)
     .bind(proyecto)
@@ -61,7 +61,7 @@ pub async fn alta(
 /// Baja de metadata; regresa el s3_key (para borrar del bucket) o None si no existe.
 pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<String>, ReturnCode> {
     sqlx::query_scalar::<_, Option<String>>(
-        "SELECT arqeth.sp_cpa_archivo_del($1, $2)"
+        "SELECT soltarc.sp_cpa_archivo_del($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -74,7 +74,7 @@ pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<Stri
 pub async fn lista_proyecto(pool: &PgPool, tenant_id: Uuid, proyecto: i32) -> Result<Vec<Archivo>, ReturnCode> {
     sqlx::query_as::<_, Archivo>(
         "SELECT id, proyecto, s3_key, nombre, mime, bytes, created_at
-           FROM arqeth.cpa_tenant_archivos
+           FROM soltarc.cpa_tenant_archivos
           WHERE tenant_id = $1 AND proyecto = $2
           ORDER BY created_at DESC"
     )
@@ -88,7 +88,7 @@ pub async fn lista_proyecto(pool: &PgPool, tenant_id: Uuid, proyecto: i32) -> Re
 /// (bytes usados, bytes máximos) del tenant. Máximo NULL/sin fila → 25GB default.
 pub async fn uso(pool: &PgPool, tenant_id: Uuid) -> Result<(i64, i64), ReturnCode> {
     let usados = sqlx::query_scalar::<_, i64>(
-        "SELECT COALESCE(SUM(bytes), 0)::BIGINT FROM arqeth.cpa_tenant_archivos WHERE tenant_id = $1"
+        "SELECT COALESCE(SUM(bytes), 0)::BIGINT FROM soltarc.cpa_tenant_archivos WHERE tenant_id = $1"
     )
     .bind(tenant_id)
     .fetch_one(pool)
@@ -96,7 +96,7 @@ pub async fn uso(pool: &PgPool, tenant_id: Uuid) -> Result<(i64, i64), ReturnCod
     .map_err(|e| ReturnCode { codigo: -95, afectado: 0, mensaje: e.to_string() })?;
 
     let max = sqlx::query_scalar::<_, Option<i64>>(
-        "SELECT max_storage_bytes FROM arqeth.cpa_tenant_limites WHERE tenant_id = $1"
+        "SELECT max_storage_bytes FROM soltarc.cpa_tenant_limites WHERE tenant_id = $1"
     )
     .bind(tenant_id)
     .fetch_optional(pool)

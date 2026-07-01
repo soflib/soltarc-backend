@@ -25,7 +25,7 @@ use uuid::Uuid;
 // ─────────────────────────────────────────────
 pub async fn alta(pool: &PgPool, cen: &CentrosCosto, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_CentrosCostoAdd($1, $2, $3, $4, $5)"
+        "SELECT soltarc.sp_cpa_CentrosCostoAdd($1, $2, $3, $4, $5)"
     )
     .bind(&cen.nombre)
     .bind(cen.tipo)
@@ -47,7 +47,7 @@ pub async fn alta(pool: &PgPool, cen: &CentrosCosto, tenant_id: Uuid) -> ReturnC
 // ─────────────────────────────────────────────
 pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_CentrosCostoDel($1, $2)"
+        "SELECT soltarc.sp_cpa_CentrosCostoDel($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -66,7 +66,7 @@ pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
 // ─────────────────────────────────────────────
 pub async fn cambios(pool: &PgPool, cen: &CentrosCosto, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_CentrosCostoUpd($1, $2, $3, $4, $5, $6)"
+        "SELECT soltarc.sp_cpa_CentrosCostoUpd($1, $2, $3, $4, $5, $6)"
     )
     .bind(cen.id)
     .bind(&cen.nombre)
@@ -89,7 +89,7 @@ pub async fn cambios(pool: &PgPool, cen: &CentrosCosto, tenant_id: Uuid) -> Retu
 // ─────────────────────────────────────────────
 pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<CentrosCosto>, ReturnCode> {
     let result = sqlx::query_as::<_, CentrosCosto>(
-        "SELECT * FROM arqeth.sp_cpa_CentrosCostoQry($1, $2)"
+        "SELECT * FROM soltarc.sp_cpa_CentrosCostoQry($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -107,7 +107,7 @@ pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<
 // ─────────────────────────────────────────────
 pub async fn obtiene_todo(pool: &PgPool, activos: bool, tenant_id: Uuid) -> Result<Vec<CentrosCosto>, ReturnCode> {
     let result = sqlx::query_as::<_, CentrosCosto>(
-        "SELECT * FROM arqeth.sp_cpa_CentrosCostosLstAll($1, $2)"
+        "SELECT * FROM soltarc.sp_cpa_CentrosCostosLstAll($1, $2)"
     )
     .bind(activos)
     .bind(tenant_id)
@@ -126,7 +126,7 @@ pub async fn obtiene_todo(pool: &PgPool, activos: bool, tenant_id: Uuid) -> Resu
 // Idempotente: re-llamarlo para el mismo tenant no duplica filas.
 // ─────────────────────────────────────────────
 pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid, lang: &str) -> Result<i32, sqlx::Error> {
-    sqlx::query_scalar::<_, i32>("SELECT arqeth.sp_cpa_centroscosto_seed($1, $2)")
+    sqlx::query_scalar::<_, i32>("SELECT soltarc.sp_cpa_centroscosto_seed($1, $2)")
         .bind(tenant_id)
         .bind(lang)
         .fetch_one(pool)
@@ -138,7 +138,7 @@ pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid, lang: &str) -> Resu
 // ─────────────────────────────────────────────
 pub async fn lookup(pool: &PgPool, q: &str, limit: i32, tenant_id: Uuid) -> Result<Vec<LookupItem>, ReturnCode> {
     let result = sqlx::query_as::<_, LookupItem>(
-        "SELECT id, etiqueta FROM arqeth.sp_cpa_centroscosto_lookup($1, $2, $3)"
+        "SELECT id, etiqueta FROM soltarc.sp_cpa_centroscosto_lookup($1, $2, $3)"
     )
     .bind(q)
     .bind(limit)

@@ -94,13 +94,20 @@ async fn main() {
         }
     };
 
-    let allowed_origins = [
-        "http://localhost:3001".parse::<HeaderValue>().unwrap(),
-        "http://localhost:3000".parse::<HeaderValue>().unwrap(),
-        "http://localhost:5173".parse::<HeaderValue>().unwrap(),
-        "https://dashboard.soltarc.com".parse::<HeaderValue>().unwrap(),
-        "https://soltarc.com".parse::<HeaderValue>().unwrap(),
-    ];
+    // Orígenes CORS permitidos — lista separada por comas en CORS_ALLOWED_ORIGINS
+    // (ver env/qa.env y env/prod.env). Cada entrada debe ser un origen válido
+    // (esquema://host[:puerto], sin barra final).
+    let allowed_origins: Vec<HeaderValue> = std::env::var("CORS_ALLOWED_ORIGINS")
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|origin| {
+            origin
+                .parse::<HeaderValue>()
+                .unwrap_or_else(|_| panic!("CORS_ALLOWED_ORIGINS contiene un origen inválido: {origin:?}"))
+        })
+        .collect();
 
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::list(allowed_origins))
@@ -120,7 +127,10 @@ async fn main() {
         .unwrap();
 
     tracing::info!(addr = "0.0.0.0:2009", "HTTP server ready");
-    tracing::info!(url = "http://localhost:2009/swagger-ui/", "Swagger UI available");
+    // Swagger UI solo se monta en ENV=dev (ver build_router); el log lo refleja.
+    if std::env::var("ENV").unwrap_or_default().to_lowercase() == "dev" {
+        tracing::info!(url = "http://localhost:2009/swagger-ui/", "Swagger UI available");
+    }
 
     axum::serve(listener, app.into_make_service())
         .await

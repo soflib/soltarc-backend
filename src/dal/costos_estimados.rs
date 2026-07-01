@@ -24,7 +24,7 @@ use uuid::Uuid;
 // ─────────────────────────────────────────────
 pub async fn alta(pool: &PgPool, cos: &CostosEstimados, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_CostosEstimados_Add($1, $2, $3, $4, $5, $6, $7, $8)"
+        "SELECT soltarc.ppto_sp_CostosEstimados_Add($1, $2, $3, $4, $5, $6, $7, $8)"
     )
     .bind(cos.tipo)
     .bind(&cos.nombre)
@@ -49,7 +49,7 @@ pub async fn alta(pool: &PgPool, cos: &CostosEstimados, tenant_id: Uuid) -> Retu
 // ─────────────────────────────────────────────
 pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_CostosEstimados_DEL($1, $2)"
+        "SELECT soltarc.ppto_sp_CostosEstimados_DEL($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -68,7 +68,7 @@ pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
 // ─────────────────────────────────────────────
 pub async fn cambios(pool: &PgPool, cos: &CostosEstimados, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_CostosEstimados_UPD($1, $2, $3, $4, $5, $6, $7, $8, $9)"
+        "SELECT soltarc.ppto_sp_CostosEstimados_UPD($1, $2, $3, $4, $5, $6, $7, $8, $9)"
     )
     .bind(cos.id)
     .bind(cos.tipo)
@@ -94,7 +94,7 @@ pub async fn cambios(pool: &PgPool, cos: &CostosEstimados, tenant_id: Uuid) -> R
 // ─────────────────────────────────────────────
 pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<CostosEstimados>, ReturnCode> {
     let result = sqlx::query_as::<_, CostosEstimados>(
-        "SELECT * FROM arqeth.ppto_sp_CostosEstimados_QRY($1, $2)"
+        "SELECT * FROM soltarc.ppto_sp_CostosEstimados_QRY($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -114,7 +114,7 @@ pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<
 // ─────────────────────────────────────────────
 pub async fn obtiene_activos(pool: &PgPool, activos: bool, tenant_id: Uuid) -> Result<Vec<CostosEstimados>, ReturnCode> {
     let result = sqlx::query_as::<_, CostosEstimados>(
-        "SELECT * FROM arqeth.ppto_sp_CostosEstimados_LSTACT($1, $2)"
+        "SELECT * FROM soltarc.ppto_sp_CostosEstimados_LSTACT($1, $2)"
     )
     .bind(activos)
     .bind(tenant_id)

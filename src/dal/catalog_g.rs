@@ -31,7 +31,7 @@ pub async fn alta(pool: &PgPool, cat: &CatalogG, tenant_id: Uuid) -> ReturnCode 
            cat.tipo, cat.nombre, cat.activo, tenant_id);
 
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_catalogo_add($1, $2, $3, $4, $5)"
+        "SELECT soltarc.sp_cpa_catalogo_add($1, $2, $3, $4, $5)"
     )
     .bind(cat.tipo)
     .bind(&cat.nombre)
@@ -66,7 +66,7 @@ pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
     debug!("dal::catalog_g::baja → id={} tenant={}", id, tenant_id);
 
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_catalogo_del($1, $2)"
+        "SELECT soltarc.sp_cpa_catalogo_del($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -100,7 +100,7 @@ pub async fn cambios(pool: &PgPool, cat: &CatalogG, tenant_id: Uuid) -> ReturnCo
            id, cat.tipo, cat.nombre, tenant_id);
 
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_catalogo_upd($1, $2, $3, $4, $5, $6)"
+        "SELECT soltarc.sp_cpa_catalogo_upd($1, $2, $3, $4, $5, $6)"
     )
     .bind(id)
     .bind(cat.tipo)
@@ -135,7 +135,7 @@ pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<
     debug!("dal::catalog_g::consulta → id={} tenant={}", id, tenant_id);
 
     let result = sqlx::query_as::<_, CatalogG>(
-        "SELECT * FROM arqeth.sp_cpa_catalogo_qry($1, $2)"
+        "SELECT * FROM soltarc.sp_cpa_catalogo_qry($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -165,7 +165,7 @@ pub async fn obtiene_todo(pool: &PgPool, tenant_id: Uuid) -> Result<Vec<CatalogG
     debug!("dal::catalog_g::obtiene_todo → tenant={}", tenant_id);
 
     let result = sqlx::query_as::<_, CatalogG>(
-        "SELECT * FROM arqeth.sp_cpa_catalogo_lst_all($1)"
+        "SELECT * FROM soltarc.sp_cpa_catalogo_lst_all($1)"
     )
     .bind(tenant_id)
     .fetch_all(pool)
@@ -194,7 +194,7 @@ pub async fn obtiene_por_tipo(pool: &PgPool, tipo: i32, tenant_id: Uuid) -> Resu
     debug!("dal::catalog_g::obtiene_por_tipo → tipo={} tenant={}", tipo, tenant_id);
 
     let result = sqlx::query_as::<_, CatalogG>(
-        "SELECT * FROM arqeth.sp_cpa_catalogo_qry_tipo($1, $2)"
+        "SELECT * FROM soltarc.sp_cpa_catalogo_qry_tipo($1, $2)"
     )
     .bind(tipo as i16)
     .bind(tenant_id)
@@ -224,7 +224,7 @@ pub async fn obtiene_tipos(pool: &PgPool, tenant_id: Uuid) -> Result<Vec<Catalog
     debug!("dal::catalog_g::obtiene_tipos → tenant={}", tenant_id);
 
     let result = sqlx::query_as::<_, CatalogG>(
-        "SELECT * FROM arqeth.sp_cpa_catalogo_lst_tipos($1)"
+        "SELECT * FROM soltarc.sp_cpa_catalogo_lst_tipos($1)"
     )
     .bind(tenant_id)
     .fetch_all(pool)
@@ -255,7 +255,7 @@ pub async fn obtiene_tipos(pool: &PgPool, tenant_id: Uuid) -> Result<Vec<Catalog
 // Idempotente: re-llamarlo para el mismo tenant no duplica filas.
 // ─────────────────────────────────────────────
 pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid, lang: &str) -> Result<i32, sqlx::Error> {
-    sqlx::query_scalar::<_, i32>("SELECT arqeth.sp_cpa_catalogo_seed($1, $2)")
+    sqlx::query_scalar::<_, i32>("SELECT soltarc.sp_cpa_catalogo_seed($1, $2)")
         .bind(tenant_id)
         .bind(lang)
         .fetch_one(pool)
@@ -267,7 +267,7 @@ pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid, lang: &str) -> Resu
 // ─────────────────────────────────────────────
 pub async fn lookup(pool: &PgPool, tipo: i16, q: &str, limit: i32, tenant_id: Uuid) -> Result<Vec<LookupItem>, ReturnCode> {
     let result = sqlx::query_as::<_, LookupItem>(
-        "SELECT id, etiqueta FROM arqeth.sp_cpa_catalogo_lookup($1, $2, $3, $4)"
+        "SELECT id, etiqueta FROM soltarc.sp_cpa_catalogo_lookup($1, $2, $3, $4)"
     )
     .bind(tipo)
     .bind(q)

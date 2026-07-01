@@ -1,8 +1,8 @@
 // Programa...: tenant_limite
 // Descripción: topes por tenant según el plan comprado (proyectos + almacenamiento).
-//   El plan vive en Medusa (auth.tenant_payments, otra DB) y los SP de arqeth
+//   El plan vive en Medusa (auth.tenant_payments, otra DB) y los SP de soltarc
 //   (creación de proyectos, alta de archivos) no pueden leerlo cross-DB. Por eso
-//   guardamos los topes en arqeth.cpa_tenant_limites en el registro (donde sí
+//   guardamos los topes en soltarc.cpa_tenant_limites en el registro (donde sí
 //   tenemos el plan): la creación de proyectos los valida local en
 //   sp_cpa_proyectosadd y la cuota de almacenamiento en sp_cpa_archivo_add.
 //
@@ -36,7 +36,7 @@ pub fn storage_for_plan(plan: &str) -> Option<i64> {
     }
 }
 
-/// Upsert de los topes del tenant en arqeth.cpa_tenant_limites.
+/// Upsert de los topes del tenant en soltarc.cpa_tenant_limites.
 /// `None` se guarda como NULL (proyectos ilimitados / cuota por default).
 /// `idioma`:
 ///   Some("es"|"en") → fija el idioma de los seeds del tenant (alta de admin).
@@ -48,7 +48,7 @@ pub async fn set_limite(
     max_storage_bytes: Option<i64>,
     idioma: Option<&str>,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("SELECT arqeth.sp_cpa_tenant_limite_set($1, $2, $3, $4)")
+    sqlx::query("SELECT soltarc.sp_cpa_tenant_limite_set($1, $2, $3, $4)")
         .bind(tenant_id)
         .bind(max_proyectos)
         .bind(max_storage_bytes)

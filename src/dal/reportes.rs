@@ -36,7 +36,7 @@ use time::Date;
 // ─────────────────────────────────────────────
 pub async fn captura_diaria(pool: &PgPool, fecha_ini: Date, fecha_fin: Date) -> Result<Vec<CapturaDiaria>, ReturnCode> {
     let result = sqlx::query_as::<_, CapturaDiaria>(
-        "SELECT * FROM arqeth.sp_cpa_CapturaDiaria($1, $2)"
+        "SELECT * FROM soltarc.sp_cpa_CapturaDiaria($1, $2)"
     )
     .bind(fecha_ini)
     .bind(fecha_fin)
@@ -54,7 +54,7 @@ pub async fn captura_diaria(pool: &PgPool, fecha_ini: Date, fecha_fin: Date) -> 
 // ─────────────────────────────────────────────
 pub async fn ingresos_reporte(pool: &PgPool, fecha_ini: Date, fecha_fin: Date) -> Result<Vec<IngresosReporte>, ReturnCode> {
     let result = sqlx::query_as::<_, IngresosReporte>(
-        "SELECT * FROM arqeth.sp_cpa_IngresosReporte($1, $2)"
+        "SELECT * FROM soltarc.sp_cpa_IngresosReporte($1, $2)"
     )
     .bind(fecha_ini)
     .bind(fecha_fin)
@@ -72,7 +72,7 @@ pub async fn ingresos_reporte(pool: &PgPool, fecha_ini: Date, fecha_fin: Date) -
 // ─────────────────────────────────────────────
 pub async fn ingresos_cliente(pool: &PgPool, id: i32, fecha_ini: Date, fecha_fin: Date) -> Result<Vec<IngresosCliente>, ReturnCode> {
     let result = sqlx::query_as::<_, IngresosCliente>(
-        "SELECT * FROM arqeth.sp_cpa_IngresosQryCliente($1, $2, $3)"
+        "SELECT * FROM soltarc.sp_cpa_IngresosQryCliente($1, $2, $3)"
     )
     .bind(id)
     .bind(fecha_ini)
@@ -91,7 +91,7 @@ pub async fn ingresos_cliente(pool: &PgPool, id: i32, fecha_ini: Date, fecha_fin
 // ─────────────────────────────────────────────
 pub async fn estado_de_cuenta(pool: &PgPool, id: i32) -> Result<Vec<EstadoCuenta>, ReturnCode> {
     let result = sqlx::query_as::<_, EstadoCuenta>(
-        "SELECT * FROM arqeth.sp_cpa_IngresosEstadoCuenta($1)"
+        "SELECT * FROM soltarc.sp_cpa_IngresosEstadoCuenta($1)"
     )
     .bind(id)
     .fetch_all(pool).await;
@@ -110,7 +110,7 @@ pub async fn estado_de_cuenta(pool: &PgPool, id: i32) -> Result<Vec<EstadoCuenta
 // ─────────────────────────────────────────────
 pub async fn totales_ppto(pool: &PgPool, presupuesto: i32) -> Result<rust_decimal::Decimal, ReturnCode> {
     let result = sqlx::query_scalar::<_, rust_decimal::Decimal>(
-        "SELECT arqeth.ppto_sp_Reportes_PPTO_Totales($1)"
+        "SELECT soltarc.ppto_sp_Reportes_PPTO_Totales($1)"
     )
     .bind(presupuesto)
     .fetch_optional(pool)
@@ -128,7 +128,7 @@ pub async fn totales_ppto(pool: &PgPool, presupuesto: i32) -> Result<rust_decima
 // ─────────────────────────────────────────────
 pub async fn carga_partidas(pool: &PgPool, presupuesto: i32) -> Result<Vec<PartidasPptoReporte>, ReturnCode> {
     let result = sqlx::query_as::<_, PartidasPptoReporte>(
-        "SELECT * FROM arqeth.ppto_sp_Reportes_PPTO($1)"
+        "SELECT * FROM soltarc.ppto_sp_Reportes_PPTO($1)"
     )
     .bind(presupuesto)
     .fetch_all(pool).await;
@@ -145,7 +145,7 @@ pub async fn carga_partidas(pool: &PgPool, presupuesto: i32) -> Result<Vec<Parti
 // ─────────────────────────────────────────────
 pub async fn arbol_tareas_proyecto(pool: &PgPool, proyecto: i32) -> Result<Vec<PartidasArbol>, ReturnCode> {
     let result = sqlx::query_as::<_, PartidasArbol>(
-        "SELECT * FROM arqeth.sp_cpa_GpoDetProysArbol($1)"
+        "SELECT * FROM soltarc.sp_cpa_GpoDetProysArbol($1)"
     )
     .bind(proyecto)
     .fetch_all(pool).await;
@@ -162,7 +162,7 @@ pub async fn arbol_tareas_proyecto(pool: &PgPool, proyecto: i32) -> Result<Vec<P
 // ─────────────────────────────────────────────
 pub async fn audita_xref(pool: &PgPool, presupuesto: i32) -> Result<Vec<PartidasArbol>, ReturnCode> {
     let result = sqlx::query_as::<_, PartidasArbol>(
-        "SELECT * FROM arqeth.sp_cpa_Audita_XREF($1)"
+        "SELECT * FROM soltarc.sp_cpa_Audita_XREF($1)"
     )
     .bind(presupuesto)
     .fetch_all(pool).await;
@@ -179,7 +179,7 @@ pub async fn audita_xref(pool: &PgPool, presupuesto: i32) -> Result<Vec<Partidas
 // ─────────────────────────────────────────────
 pub async fn ingresos(pool: &PgPool, proyecto: i32) -> Result<Vec<RegistroAvance>, ReturnCode> {
     let result = sqlx::query_as::<_, RegistroAvance>(
-        "SELECT * FROM arqeth.sp_cpa_Proy_AvanceDeObraIng($1)"
+        "SELECT * FROM soltarc.sp_cpa_Proy_AvanceDeObraIng($1)"
     )
     .bind(proyecto)
     .fetch_all(pool).await;
@@ -196,7 +196,7 @@ pub async fn ingresos(pool: &PgPool, proyecto: i32) -> Result<Vec<RegistroAvance
 // ─────────────────────────────────────────────
 pub async fn egresos(pool: &PgPool, proyecto: i32) -> Result<Vec<RegistroAvance>, ReturnCode> {
     let result = sqlx::query_as::<_, RegistroAvance>(
-        "SELECT * FROM arqeth.sp_cpa_Proy_AvanceDeObraEgr($1)"
+        "SELECT * FROM soltarc.sp_cpa_Proy_AvanceDeObraEgr($1)"
     )
     .bind(proyecto)
     .fetch_all(pool).await;
@@ -213,7 +213,7 @@ pub async fn egresos(pool: &PgPool, proyecto: i32) -> Result<Vec<RegistroAvance>
 // ─────────────────────────────────────────────
 pub async fn egresos_centros_costo(pool: &PgPool, id: i32, fecha_ini: Date, fecha_fin: Date) -> Result<Vec<EgresosCentroCosto>, ReturnCode> {
     let result = sqlx::query_as::<_, EgresosCentroCosto>(
-        "SELECT * FROM arqeth.sp_cpa_EgresosQryCenCo($1, $2, $3)"
+        "SELECT * FROM soltarc.sp_cpa_EgresosQryCenCo($1, $2, $3)"
     )
     .bind(id)
     .bind(fecha_ini)
@@ -232,7 +232,7 @@ pub async fn egresos_centros_costo(pool: &PgPool, id: i32, fecha_ini: Date, fech
 // ─────────────────────────────────────────────
 pub async fn egresos_proveedor(pool: &PgPool, id: i32, fecha_ini: Date, fecha_fin: Date) -> Result<Vec<EgresosProveedor>, ReturnCode> {
     let result = sqlx::query_as::<_, EgresosProveedor>(
-        "SELECT * FROM arqeth.sp_cpa_EgresosQryProveedor($1, $2, $3)"
+        "SELECT * FROM soltarc.sp_cpa_EgresosQryProveedor($1, $2, $3)"
     )
     .bind(id)
     .bind(fecha_ini)
@@ -251,7 +251,7 @@ pub async fn egresos_proveedor(pool: &PgPool, id: i32, fecha_ini: Date, fecha_fi
 // ─────────────────────────────────────────────
 pub async fn egresos_reporte(pool: &PgPool, fecha_ini: Date, fecha_fin: Date) -> Result<Vec<EgresosReporte>, ReturnCode> {
     let result = sqlx::query_as::<_, EgresosReporte>(
-        "SELECT * FROM arqeth.sp_cpa_FinanzasEgresosAcum($1, $2)"
+        "SELECT * FROM soltarc.sp_cpa_FinanzasEgresosAcum($1, $2)"
     )
     .bind(fecha_ini)
     .bind(fecha_fin)
@@ -269,7 +269,7 @@ pub async fn egresos_reporte(pool: &PgPool, fecha_ini: Date, fecha_fin: Date) ->
 // ─────────────────────────────────────────────
 pub async fn reporte_gral_egresos(pool: &PgPool, banco: i32, fecha_ini: Date, fecha_fin: Date) -> Result<Vec<EgresosReporte>, ReturnCode> {
     let result = sqlx::query_as::<_, EgresosReporte>(
-        "SELECT * FROM arqeth.sp_cpa_Reporte_Egresos($1, $2, $3)"
+        "SELECT * FROM soltarc.sp_cpa_Reporte_Egresos($1, $2, $3)"
     )
     .bind(banco)
     .bind(fecha_ini)

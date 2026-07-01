@@ -29,7 +29,7 @@ use uuid::Uuid;
 // ─────────────────────────────────────────────
 pub async fn alta(pool: &PgPool, proy: &Proyectos, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_ProyectosAdd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)"
+        "SELECT soltarc.sp_cpa_ProyectosAdd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)"
     )
     .bind(proy.tipo)
     .bind(&proy.nombre)
@@ -65,7 +65,7 @@ pub async fn alta(pool: &PgPool, proy: &Proyectos, tenant_id: Uuid) -> ReturnCod
 // ─────────────────────────────────────────────
 pub async fn baja(pool: &PgPool, proyecto: i32, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_as::<_, ReturnCode>(
-        "SELECT codigo, mensaje, afectado FROM arqeth.sp_cpa_ProyectosDel($1, $2)"
+        "SELECT codigo, mensaje, afectado FROM soltarc.sp_cpa_ProyectosDel($1, $2)"
     )
     .bind(proyecto)
     .bind(tenant_id)
@@ -84,7 +84,7 @@ pub async fn baja(pool: &PgPool, proyecto: i32, tenant_id: Uuid) -> ReturnCode {
 // ─────────────────────────────────────────────
 pub async fn cambio(pool: &PgPool, proy: &Proyectos, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_ProyectosUpd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)"
+        "SELECT soltarc.sp_cpa_ProyectosUpd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)"
     )
     .bind(proy.id)
     .bind(proy.tipo)
@@ -120,7 +120,7 @@ pub async fn asignaciones_set(
     pool: &PgPool, proyecto: i32, tenant_id: Uuid, grupos: &[i32], usuarios: &[i32],
 ) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_ProyectosAsignaciones_Set($1, $2, $3, $4)"
+        "SELECT soltarc.sp_cpa_ProyectosAsignaciones_Set($1, $2, $3, $4)"
     )
     .bind(proyecto)
     .bind(tenant_id)
@@ -151,7 +151,7 @@ pub async fn asignaciones_lst(
 ) -> Result<Vec<ProyectoAsignacion>, ReturnCode> {
     sqlx::query_as::<_, ProyectoAsignacion>(
         "SELECT gn_id, gn_usr_id, grupo_nombre, usuario_user_id \
-         FROM arqeth.sp_cpa_ProyectosAsignaciones_Lst($1, $2)"
+         FROM soltarc.sp_cpa_ProyectosAsignaciones_Lst($1, $2)"
     )
     .bind(proyecto)
     .bind(tenant_id)
@@ -165,7 +165,7 @@ pub async fn asignaciones_lst(
 // ─────────────────────────────────────────────
 pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<Proyectos>, ReturnCode> {
     let result = sqlx::query_as::<_, Proyectos>(
-        "SELECT * FROM arqeth.sp_cpa_ProyectosQry($1, $2)"
+        "SELECT * FROM soltarc.sp_cpa_ProyectosQry($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -188,7 +188,7 @@ pub async fn llena_proyectos(
     pool: &PgPool, activos: bool, tenant_id: Uuid, grupo: i32, gn_usr_id: i32, nivel: i32,
 ) -> Result<Vec<Proyectos>, ReturnCode> {
     sqlx::query_as::<_, Proyectos>(
-        "SELECT * FROM arqeth.sp_cpa_ProyectosLstAct($1, $2, $3, $4, $5)"
+        "SELECT * FROM soltarc.sp_cpa_ProyectosLstAct($1, $2, $3, $4, $5)"
     )
     .bind(activos)
     .bind(tenant_id)
@@ -210,7 +210,7 @@ pub async fn llena_proyectos(
 // ─────────────────────────────────────────────
 pub async fn cliente_proyecto(pool: &PgPool, proyecto: i32) -> Result<String, ReturnCode> {
     let result = sqlx::query_scalar::<_, String>(
-        "SELECT arqeth.sp_cpa_ProyectoClienteNombre($1)"
+        "SELECT soltarc.sp_cpa_ProyectoClienteNombre($1)"
     )
     .bind(proyecto)
     .fetch_optional(pool)
@@ -235,7 +235,7 @@ pub async fn dir_proyecto(pool: &PgPool, proyecto: i32) -> Result<String, Return
     }
 
     let result = sqlx::query_scalar::<_, Option<String>>(
-        "SELECT arqeth.sp_cpa_ProyectoDirImagenes($1)"
+        "SELECT soltarc.sp_cpa_ProyectoDirImagenes($1)"
     )
     .bind(proyecto)
     .fetch_optional(pool)
@@ -265,14 +265,14 @@ pub async fn proyecto_accesible(
 ) -> bool {
     sqlx::query_scalar::<_, bool>(
         r#"SELECT EXISTS(
-            SELECT 1 FROM arqeth.cpa_proyectos p
+            SELECT 1 FROM soltarc.cpa_proyectos p
             WHERE p.tenant_id = $1 AND p.id = $5
               AND ( $4 = 1
                     OR ($4 = 2  AND $2 > 0 AND EXISTS (
-                          SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                          SELECT 1 FROM soltarc.cpa_proyecto_asignaciones a
                           WHERE a.proyecto_id = p.id AND a.gn_id = $2))
                     OR ($4 >= 3 AND $3 > 0 AND EXISTS (
-                          SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                          SELECT 1 FROM soltarc.cpa_proyecto_asignaciones a
                           WHERE a.proyecto_id = p.id AND a.gn_usr_id = $3)) ) )"#,
     )
     .bind(tenant_id)
@@ -293,15 +293,15 @@ pub async fn lookup_accesibles(
 ) -> Vec<LookupItem> {
     sqlx::query_as::<_, LookupItem>(
         r#"SELECT p.id, (p.nombre || COALESCE(' — ' || c.nombre, '')) AS etiqueta
-           FROM arqeth.cpa_proyectos p
-           LEFT JOIN arqeth.cpa_clientes c ON c.id = p.cliente
+           FROM soltarc.cpa_proyectos p
+           LEFT JOIN soltarc.cpa_clientes c ON c.id = p.cliente
            WHERE p.tenant_id = $1 AND p.activo = TRUE
              AND ( $4 = 1
                    OR ($4 = 2  AND $2 > 0 AND EXISTS (
-                         SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                         SELECT 1 FROM soltarc.cpa_proyecto_asignaciones a
                          WHERE a.proyecto_id = p.id AND a.gn_id = $2))
                    OR ($4 >= 3 AND $3 > 0 AND EXISTS (
-                         SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                         SELECT 1 FROM soltarc.cpa_proyecto_asignaciones a
                          WHERE a.proyecto_id = p.id AND a.gn_usr_id = $3)) )
              AND ($5 = '' OR p.nombre ILIKE '%' || $5 || '%')
              AND ($7 IS NULL OR $7 = 0 OR p.cliente = $7)
@@ -321,7 +321,7 @@ pub async fn total_ppto(pool: &PgPool, proyecto: i32) -> Result<rust_decimal::De
     }
 
     let result = sqlx::query_scalar::<_, rust_decimal::Decimal>(
-        "SELECT arqeth.sp_cpa_ProyectosTotalPPTO($1)"
+        "SELECT soltarc.sp_cpa_ProyectosTotalPPTO($1)"
     )
     .bind(proyecto)
     .fetch_optional(pool)
@@ -340,7 +340,7 @@ pub async fn total_ppto(pool: &PgPool, proyecto: i32) -> Result<rust_decimal::De
 // ─────────────────────────────────────────────
 pub async fn lookup(pool: &PgPool, q: &str, cliente: Option<i32>, limit: i32, tenant_id: Uuid) -> Result<Vec<LookupItem>, ReturnCode> {
     let result = sqlx::query_as::<_, LookupItem>(
-        "SELECT id, etiqueta FROM arqeth.sp_cpa_proyectos_lookup($1, $2, $3, $4)"
+        "SELECT id, etiqueta FROM soltarc.sp_cpa_proyectos_lookup($1, $2, $3, $4)"
     )
     .bind(q)
     .bind(cliente)   // None / 0 = todos los proyectos del tenant
@@ -360,7 +360,7 @@ pub async fn lookup(pool: &PgPool, q: &str, cliente: Option<i32>, limit: i32, te
 // Idempotente: re-llamarlo para el mismo tenant no duplica filas.
 // ─────────────────────────────────────────────
 pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid) -> Result<i32, sqlx::Error> {
-    sqlx::query_scalar::<_, i32>("SELECT arqeth.sp_cpa_proyectos_seed($1)")
+    sqlx::query_scalar::<_, i32>("SELECT soltarc.sp_cpa_proyectos_seed($1)")
         .bind(tenant_id)
         .fetch_one(pool)
         .await
@@ -373,7 +373,7 @@ pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid) -> Result<i32, sqlx
 // ─────────────────────────────────────────────
 pub async fn cupo(pool: &PgPool, tenant_id: Uuid) -> Result<(i64, Option<i32>), ReturnCode> {
     let usados = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM arqeth.cpa_proyectos WHERE tenant_id = $1 AND activo = TRUE"
+        "SELECT COUNT(*) FROM soltarc.cpa_proyectos WHERE tenant_id = $1 AND activo = TRUE"
     )
     .bind(tenant_id)
     .fetch_one(pool)
@@ -381,7 +381,7 @@ pub async fn cupo(pool: &PgPool, tenant_id: Uuid) -> Result<(i64, Option<i32>), 
     .map_err(|e| ReturnCode { codigo: -95, afectado: 0, mensaje: e.to_string() })?;
 
     let max = sqlx::query_scalar::<_, Option<i32>>(
-        "SELECT max_proyectos FROM arqeth.cpa_tenant_limites WHERE tenant_id = $1"
+        "SELECT max_proyectos FROM soltarc.cpa_tenant_limites WHERE tenant_id = $1"
     )
     .bind(tenant_id)
     .fetch_optional(pool)

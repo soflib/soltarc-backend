@@ -19,7 +19,7 @@ use uuid::Uuid;
 // ─────────────────────────────────────────────
 pub async fn alta(pool: &PgPool, usr: &GnUsuarios, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_GN_UsuariosAdd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)"
+        "SELECT soltarc.sp_GN_UsuariosAdd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)"
     )
     .bind(&usr.user_id)
     .bind(usr.grupo_negocio)
@@ -48,7 +48,7 @@ pub async fn alta(pool: &PgPool, usr: &GnUsuarios, tenant_id: Uuid) -> ReturnCod
 // ─────────────────────────────────────────────
 pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_as::<_, ReturnCode>(
-        "SELECT codigo, mensaje, afectado FROM arqeth.sp_GN_UsuariosDel($1, $2)"
+        "SELECT codigo, mensaje, afectado FROM soltarc.sp_GN_UsuariosDel($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -67,7 +67,7 @@ pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
 // ─────────────────────────────────────────────
 pub async fn cambios(pool: &PgPool, usr: &GnUsuarios, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_GN_UsuariosUpd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"
+        "SELECT soltarc.sp_GN_UsuariosUpd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"
     )
     .bind(usr.id)
     .bind(&usr.user_id)
@@ -96,7 +96,7 @@ pub async fn cambios(pool: &PgPool, usr: &GnUsuarios, tenant_id: Uuid) -> Return
 // ─────────────────────────────────────────────
 pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<GnUsuarios>, ReturnCode> {
     let result = sqlx::query_as::<_, GnUsuarios>(
-        "SELECT * FROM arqeth.sp_GN_UsuariosQry($1, $2)"
+        "SELECT * FROM soltarc.sp_GN_UsuariosQry($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -114,7 +114,7 @@ pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<
 // ─────────────────────────────────────────────
 pub async fn obtiene_todo(pool: &PgPool, tenant_id: Uuid) -> Result<Vec<GnUsuarios>, ReturnCode> {
     let result = sqlx::query_as::<_, GnUsuarios>(
-        "SELECT * FROM arqeth.sp_GN_UsuariosLstAll($1)"
+        "SELECT * FROM soltarc.sp_GN_UsuariosLstAll($1)"
     )
     .bind(tenant_id)
     .fetch_all(pool)
@@ -131,7 +131,7 @@ pub async fn obtiene_todo(pool: &PgPool, tenant_id: Uuid) -> Result<Vec<GnUsuari
 // LINK — sp_gn_usuarios_link: liga el perfil de negocio al usuario real (UUID).
 // ─────────────────────────────────────────────
 pub async fn link(pool: &PgPool, tenant_id: Uuid, usuario_uuid: Uuid, email: &str, nivel: i32) -> Result<i32, sqlx::Error> {
-    sqlx::query_scalar::<_, i32>("SELECT arqeth.sp_gn_usuarios_link($1, $2, $3, $4)")
+    sqlx::query_scalar::<_, i32>("SELECT soltarc.sp_gn_usuarios_link($1, $2, $3, $4)")
         .bind(tenant_id)
         .bind(usuario_uuid)
         .bind(email)
@@ -146,7 +146,7 @@ pub async fn link(pool: &PgPool, tenant_id: Uuid, usuario_uuid: Uuid, email: &st
 // ─────────────────────────────────────────────
 pub async fn perfil_de(pool: &PgPool, tenant_id: Uuid, usuario_uuid: Uuid) -> (i32, i32, i32) {
     let row = sqlx::query_as::<_, (i32, i32, i32)>(
-        "SELECT grupo_negocio, gn_usr_id, nivel FROM arqeth.sp_gn_usuarios_perfil($1, $2)"
+        "SELECT grupo_negocio, gn_usr_id, nivel FROM soltarc.sp_gn_usuarios_perfil($1, $2)"
     )
     .bind(tenant_id)
     .bind(usuario_uuid)

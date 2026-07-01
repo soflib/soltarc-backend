@@ -14,7 +14,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tracing::debug;
+use tracing::{debug, info, warn};
 use utoipa::ToSchema;
 
 use crate::api::middleware::roles::AuthUser;
@@ -140,6 +140,26 @@ pub async fn create_user(
         return (StatusCode::BAD_REQUEST, Json(json!({ "error": "caller has no tenant" })));
     }
 
+    // Datos para el correo de alta (antes de mover `body` al request gRPC).
+    let new_email = body.email.clone();
+    let new_pass  = body.password.clone();
+    // Rol con inicial mayúscula para mostrarlo legible en el correo.
+    let new_rol   = {
+        let mut c = body.role.chars();
+        match c.next() {
+            Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+            None    => String::new(),
+        }
+    };
+    // Nombre: full_name → username → parte local del correo.
+    let new_name  = {
+        let fname = body.full_name.clone().unwrap_or_default();
+        let uname = body.username.clone().unwrap_or_default();
+        if !fname.trim().is_empty()      { fname }
+        else if !uname.trim().is_empty() { uname }
+        else { new_email.split('@').next().unwrap_or(&new_email).to_string() }
+    };
+
     let req = RegisterRequest {
         email:          body.email,
         username:       body.username.unwrap_or_default(),
@@ -157,7 +177,27 @@ pub async fn create_user(
 
     let mut client = state.auth_grpc;
     match client.register(req).await {
-        Ok(_) => (StatusCode::CREATED, Json(json!({ "success": true }))),
+        Ok(_) => {
+            // Correo al nuevo usuario con sus credenciales (best-effort, fire-and-forget):
+            // si falta config de Outlook o falla el envío, el alta sigue OK.
+            let dash = std::env::var("DASHBOARD_URL")
+                .ok().filter(|s| !s.trim().is_empty())
+                .unwrap_or_else(|| "https://dashboard.soflib.com".to_string());
+            tokio::spawn(async move {
+                let vars = [
+                    ("nombre",        new_name.as_str()),
+                    ("email",         new_email.as_str()),
+                    ("password",      new_pass.as_str()),
+                    ("rol",           new_rol.as_str()),
+                    ("dashboard_url", dash.as_str()),
+                ];
+                match crate::infrastructure::email::outlook::send_template(&new_email, "user_created", &vars).await {
+                    Ok(_)  => info!(to = %new_email, "correo de alta de usuario enviado"),
+                    Err(e) => warn!(to = %new_email, error = %e, "correo de alta de usuario falló (alta OK)"),
+                }
+            });
+            (StatusCode::CREATED, Json(json!({ "success": true })))
+        }
         Err(status) => {
             let (code, body) = grpc_to_http(status);
             (code, Json(body))

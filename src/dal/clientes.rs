@@ -22,7 +22,7 @@ use uuid::Uuid;
 // ─────────────────────────────────────────────
 pub async fn alta(pool: &PgPool, cte: &Clientes, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_ClientesAdd($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
+        "SELECT soltarc.sp_cpa_ClientesAdd($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
     )
     .bind(&cte.nombre)
     .bind(&cte.direccion)
@@ -50,7 +50,7 @@ pub async fn alta(pool: &PgPool, cte: &Clientes, tenant_id: Uuid) -> ReturnCode 
 // ─────────────────────────────────────────────
 pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_as::<_, ReturnCode>(
-        "SELECT codigo, mensaje, afectado FROM arqeth.sp_cpa_ClientesDel($1, $2)"
+        "SELECT codigo, mensaje, afectado FROM soltarc.sp_cpa_ClientesDel($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -69,7 +69,7 @@ pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
 // ─────────────────────────────────────────────
 pub async fn cambios(pool: &PgPool, cte: &Clientes, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_ClientesUpd($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"
+        "SELECT soltarc.sp_cpa_ClientesUpd($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"
     )
     .bind(cte.id)
     .bind(&cte.nombre)
@@ -97,7 +97,7 @@ pub async fn cambios(pool: &PgPool, cte: &Clientes, tenant_id: Uuid) -> ReturnCo
 // ─────────────────────────────────────────────
 pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<Clientes>, ReturnCode> {
     let result = sqlx::query_as::<_, Clientes>(
-        "SELECT * FROM arqeth.sp_cpa_ClientesQry($1, $2)"
+        "SELECT * FROM soltarc.sp_cpa_ClientesQry($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -116,7 +116,7 @@ pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<
 // ─────────────────────────────────────────────
 pub async fn nombre_cliente(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, String>(
-        "SELECT nombre FROM arqeth.sp_cpa_ClientesQry($1, $2)"
+        "SELECT nombre FROM soltarc.sp_cpa_ClientesQry($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -135,7 +135,7 @@ pub async fn nombre_cliente(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCo
 // ─────────────────────────────────────────────
 pub async fn obtiene_clientes(pool: &PgPool, activos: bool, tenant_id: Uuid) -> Result<Vec<Clientes>, ReturnCode> {
     let result = sqlx::query_as::<_, Clientes>(
-        "SELECT * FROM arqeth.sp_cpa_ClientesLstAct($1, $2)"
+        "SELECT * FROM soltarc.sp_cpa_ClientesLstAct($1, $2)"
     )
     .bind(activos)
     .bind(tenant_id)
@@ -154,7 +154,7 @@ pub async fn obtiene_clientes(pool: &PgPool, activos: bool, tenant_id: Uuid) -> 
 // Idempotente: re-llamarlo para el mismo tenant no duplica filas.
 // ─────────────────────────────────────────────
 pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid, lang: &str) -> Result<i32, sqlx::Error> {
-    sqlx::query_scalar::<_, i32>("SELECT arqeth.sp_cpa_clientes_seed($1, $2)")
+    sqlx::query_scalar::<_, i32>("SELECT soltarc.sp_cpa_clientes_seed($1, $2)")
         .bind(tenant_id)
         .bind(lang)
         .fetch_one(pool)
@@ -167,7 +167,7 @@ pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid, lang: &str) -> Resu
 // ─────────────────────────────────────────────
 pub async fn lookup(pool: &PgPool, q: &str, limit: i32, tenant_id: Uuid) -> Result<Vec<LookupItem>, ReturnCode> {
     let result = sqlx::query_as::<_, LookupItem>(
-        "SELECT id, etiqueta FROM arqeth.sp_cpa_clientes_lookup($1, $2, $3)"
+        "SELECT id, etiqueta FROM soltarc.sp_cpa_clientes_lookup($1, $2, $3)"
     )
     .bind(q)
     .bind(limit)
@@ -195,15 +195,15 @@ pub async fn clientes_accesibles(
 ) -> Vec<LookupItem> {
     sqlx::query_as::<_, LookupItem>(
         r#"SELECT DISTINCT c.id, c.nombre AS etiqueta
-           FROM arqeth.cpa_proyectos p
-           JOIN arqeth.cpa_clientes  c ON c.id = p.cliente
+           FROM soltarc.cpa_proyectos p
+           JOIN soltarc.cpa_clientes  c ON c.id = p.cliente
            WHERE p.tenant_id = $1 AND p.activo = TRUE
              AND ( $4 = 1
                    OR ($4 = 2  AND $2 > 0 AND EXISTS (
-                         SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                         SELECT 1 FROM soltarc.cpa_proyecto_asignaciones a
                          WHERE a.proyecto_id = p.id AND a.gn_id = $2))
                    OR ($4 >= 3 AND $3 > 0 AND EXISTS (
-                         SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                         SELECT 1 FROM soltarc.cpa_proyecto_asignaciones a
                          WHERE a.proyecto_id = p.id AND a.gn_usr_id = $3)) )
            ORDER BY c.nombre"#,
     )
@@ -230,13 +230,13 @@ pub async fn cliente_accesible(
     }
     sqlx::query_scalar::<_, bool>(
         r#"SELECT EXISTS(
-            SELECT 1 FROM arqeth.cpa_proyectos p
+            SELECT 1 FROM soltarc.cpa_proyectos p
             WHERE p.tenant_id = $1 AND p.activo = TRUE AND p.cliente = $5
               AND ( ($4 = 2  AND $2 > 0 AND EXISTS (
-                        SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                        SELECT 1 FROM soltarc.cpa_proyecto_asignaciones a
                         WHERE a.proyecto_id = p.id AND a.gn_id = $2))
                     OR ($4 >= 3 AND $3 > 0 AND EXISTS (
-                        SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                        SELECT 1 FROM soltarc.cpa_proyecto_asignaciones a
                         WHERE a.proyecto_id = p.id AND a.gn_usr_id = $3)) ) )"#,
     )
     .bind(tenant_id)
@@ -255,15 +255,15 @@ pub async fn lookup_accesibles(
 ) -> Vec<LookupItem> {
     sqlx::query_as::<_, LookupItem>(
         r#"SELECT DISTINCT c.id, c.nombre AS etiqueta
-           FROM arqeth.cpa_proyectos p
-           JOIN arqeth.cpa_clientes  c ON c.id = p.cliente
+           FROM soltarc.cpa_proyectos p
+           JOIN soltarc.cpa_clientes  c ON c.id = p.cliente
            WHERE p.tenant_id = $1 AND p.activo = TRUE
              AND ( $4 = 1
                    OR ($4 = 2  AND $2 > 0 AND EXISTS (
-                         SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                         SELECT 1 FROM soltarc.cpa_proyecto_asignaciones a
                          WHERE a.proyecto_id = p.id AND a.gn_id = $2))
                    OR ($4 >= 3 AND $3 > 0 AND EXISTS (
-                         SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                         SELECT 1 FROM soltarc.cpa_proyecto_asignaciones a
                          WHERE a.proyecto_id = p.id AND a.gn_usr_id = $3)) )
              AND ($5 = '' OR c.nombre ILIKE '%' || $5 || '%')
            ORDER BY c.nombre

@@ -20,7 +20,7 @@ use uuid::Uuid;
 // ─────────────────────────────────────────────
 pub async fn alta(pool: &PgPool, gpo: &GnGrupos, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_GN_GruposAdd($1, $2, $3, $4)"
+        "SELECT soltarc.sp_GN_GruposAdd($1, $2, $3, $4)"
     )
     .bind(&gpo.nombre)
     .bind(&gpo.descripcion)
@@ -42,7 +42,7 @@ pub async fn alta(pool: &PgPool, gpo: &GnGrupos, tenant_id: Uuid) -> ReturnCode 
 // ─────────────────────────────────────────────
 pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_as::<_, ReturnCode>(
-        "SELECT codigo, mensaje, afectado FROM arqeth.sp_GN_GruposDel($1, $2)"
+        "SELECT codigo, mensaje, afectado FROM soltarc.sp_GN_GruposDel($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -61,7 +61,7 @@ pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
 // ─────────────────────────────────────────────
 pub async fn cambios(pool: &PgPool, gpo: &GnGrupos, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_GN_GruposUpd($1, $2, $3, $4, $5)"
+        "SELECT soltarc.sp_GN_GruposUpd($1, $2, $3, $4, $5)"
     )
     .bind(gpo.id)
     .bind(&gpo.nombre)
@@ -83,7 +83,7 @@ pub async fn cambios(pool: &PgPool, gpo: &GnGrupos, tenant_id: Uuid) -> ReturnCo
 // ─────────────────────────────────────────────
 pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<GnGrupos>, ReturnCode> {
     let result = sqlx::query_as::<_, GnGrupos>(
-        "SELECT * FROM arqeth.sp_GN_GruposQry($1, $2)"
+        "SELECT * FROM soltarc.sp_GN_GruposQry($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -101,7 +101,7 @@ pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<
 // ─────────────────────────────────────────────
 pub async fn obtiene_todo(pool: &PgPool, cuales: bool, tenant_id: Uuid) -> Result<Vec<GnGrupos>, ReturnCode> {
     let result = sqlx::query_as::<_, GnGrupos>(
-        "SELECT * FROM arqeth.sp_GN_GruposLstAll($1, $2)"
+        "SELECT * FROM soltarc.sp_GN_GruposLstAll($1, $2)"
     )
     .bind(cuales)
     .bind(tenant_id)
@@ -120,7 +120,7 @@ pub async fn obtiene_todo(pool: &PgPool, cuales: bool, tenant_id: Uuid) -> Resul
 // Idempotente: re-llamarlo para el mismo tenant no duplica filas.
 // ─────────────────────────────────────────────
 pub async fn seed_for_tenant(pool: &PgPool, tenant_id: Uuid, lang: &str) -> Result<i32, sqlx::Error> {
-    sqlx::query_scalar::<_, i32>("SELECT arqeth.sp_gn_grupos_seed($1, $2)")
+    sqlx::query_scalar::<_, i32>("SELECT soltarc.sp_gn_grupos_seed($1, $2)")
         .bind(tenant_id)
         .bind(lang)
         .fetch_one(pool)

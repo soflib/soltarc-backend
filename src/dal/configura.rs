@@ -19,7 +19,7 @@ use sqlx::PgPool;
 // ─────────────────────────────────────────────
 pub async fn cambia_configuracion(pool: &PgPool, cfg: &Configura) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_sys_ConfiguracionUpd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)"
+        "SELECT soltarc.sp_sys_ConfiguracionUpd($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)"
     )
     .bind(&cfg.nom_empresa)      // $1
     .bind(&cfg.tipo_unidad)      // $2
@@ -55,7 +55,7 @@ pub async fn cambia_configuracion(pool: &PgPool, cfg: &Configura) -> ReturnCode 
 // ─────────────────────────────────────────────
 pub async fn carga_configuracion(pool: &PgPool) -> Result<Option<Configura>, ReturnCode> {
     let result = sqlx::query_as::<_, Configura>(
-        "SELECT * FROM arqeth.sp_sys_ConfiguracionQry()"
+        "SELECT * FROM soltarc.sp_sys_ConfiguracionQry()"
     )
     .fetch_optional(pool)
     .await;
@@ -71,7 +71,7 @@ pub async fn carga_configuracion(pool: &PgPool) -> Result<Option<Configura>, Ret
 // ─────────────────────────────────────────────
 pub async fn accesos_rapidos_qry(pool: &PgPool, id: i32) -> Result<Option<AccesosRapidos>, ReturnCode> {
     let result = sqlx::query_as::<_, AccesosRapidos>(
-        "SELECT * FROM arqeth.sp_sys_AccesosRapidosQRY($1)"
+        "SELECT * FROM soltarc.sp_sys_AccesosRapidosQRY($1)"
     )
     .bind(id)
     .fetch_optional(pool)
@@ -88,7 +88,7 @@ pub async fn accesos_rapidos_qry(pool: &PgPool, id: i32) -> Result<Option<Acceso
 // ─────────────────────────────────────────────
 pub async fn accesos_rapidos_lst_all(pool: &PgPool) -> Result<Vec<AccesosRapidos>, ReturnCode> {
     let result = sqlx::query_as::<_, AccesosRapidos>(
-        "SELECT * FROM arqeth.sp_sys_AccesosRapidosLSTAll()"
+        "SELECT * FROM soltarc.sp_sys_AccesosRapidosLSTAll()"
     )
     .fetch_all(pool)
     .await;
@@ -105,7 +105,7 @@ pub async fn accesos_rapidos_lst_all(pool: &PgPool) -> Result<Vec<AccesosRapidos
 // ─────────────────────────────────────────────
 pub async fn accesos_rapidos_upd(pool: &PgPool, ar: &AccesosRapidos) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_sys_AccesosRapidosUPD($1, $2, $3, $4)"
+        "SELECT soltarc.sp_sys_AccesosRapidosUPD($1, $2, $3, $4)"
     )
     .bind(ar.id)
     .bind(&ar.funcion)

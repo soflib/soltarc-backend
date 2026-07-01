@@ -25,7 +25,7 @@ pub async fn consulta_numero_partidas(pool: &PgPool, proyecto: i32) -> ReturnCod
     // El SP es RETURNS TABLE(codigo, mensaje, afectado): hay que leer columnas,
     // no decodificar como escalar. `afectado` trae el COUNT.
     let result = sqlx::query_as::<_, (i32, String, i32)>(
-        "SELECT codigo, mensaje, afectado FROM arqeth.sp_cpa_ProyectoConteoPartidas($1)"
+        "SELECT codigo, mensaje, afectado FROM soltarc.sp_cpa_ProyectoConteoPartidas($1)"
     )
     .bind(proyecto)
     .fetch_one(pool)
@@ -43,7 +43,7 @@ pub async fn consulta_numero_partidas(pool: &PgPool, proyecto: i32) -> ReturnCod
 // ─────────────────────────────────────────────
 pub async fn carga_nodos(pool: &PgPool, ppto: i32, proyecto: i32) -> Result<Vec<NodoPartida>, ReturnCode> {
     let result = sqlx::query_as::<_, NodoPartida>(
-        "SELECT * FROM arqeth.ppto_sp_cpa_CreaPartidas_De_PPTO_QRY($1, $2)"
+        "SELECT * FROM soltarc.ppto_sp_cpa_CreaPartidas_De_PPTO_QRY($1, $2)"
     )
     .bind(ppto)
     .bind(proyecto)
@@ -71,7 +71,7 @@ pub async fn crea_partidas_proyecto(
     tipo: i32,
 ) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_cpa_CreaPartidas_De_PPTO($1,$2,$3,$4,$5,$6)"
+        "SELECT soltarc.ppto_sp_cpa_CreaPartidas_De_PPTO($1,$2,$3,$4,$5,$6)"
     )
     .bind(ppto)
     .bind(proyecto)
@@ -100,7 +100,7 @@ pub async fn obtiene_tipo_proyecto(pool: &PgPool, proyecto: i32) -> Result<i32, 
     // un escalar. codigo=40 → encontrado; `afectado` trae el tipo (puede ser 0,
     // p.ej. "Residencial", que es un tipo válido — NO rechazar tipo=0).
     let result = sqlx::query_as::<_, (i32, String, i32)>(
-        "SELECT codigo, mensaje, afectado FROM arqeth.sp_cpa_ProyectoTipo($1)"
+        "SELECT codigo, mensaje, afectado FROM soltarc.sp_cpa_ProyectoTipo($1)"
     )
     .bind(proyecto)
     .fetch_optional(pool)

@@ -27,7 +27,7 @@ use time::Date;
 // ─────────────────────────────────────────────
 pub async fn alta(pool: &PgPool, det: &DetalleProyectos) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_DetalleProyectosAdd($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
+        "SELECT soltarc.sp_cpa_DetalleProyectosAdd($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
     )
     .bind(det.proyecto)
     .bind(det.tipo)
@@ -55,7 +55,7 @@ pub async fn alta(pool: &PgPool, det: &DetalleProyectos) -> ReturnCode {
 // ─────────────────────────────────────────────
 pub async fn baja(pool: &PgPool, id_tarea: i32) -> ReturnCode {
     let result = sqlx::query_as::<_, ReturnCode>(
-        "SELECT codigo, mensaje, afectado FROM arqeth.sp_cpa_DetalleProyectosDel($1)"
+        "SELECT codigo, mensaje, afectado FROM soltarc.sp_cpa_DetalleProyectosDel($1)"
     )
     .bind(id_tarea)
     .fetch_optional(pool)
@@ -73,7 +73,7 @@ pub async fn baja(pool: &PgPool, id_tarea: i32) -> ReturnCode {
 // ─────────────────────────────────────────────
 pub async fn cambios(pool: &PgPool, det: &DetalleProyectos) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_DetalleProyectosUpd($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"
+        "SELECT soltarc.sp_cpa_DetalleProyectosUpd($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"
     )
     .bind(det.id)
     .bind(det.proyecto)
@@ -101,7 +101,7 @@ pub async fn cambios(pool: &PgPool, det: &DetalleProyectos) -> ReturnCode {
 // ─────────────────────────────────────────────
 pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<DetalleProyectos>, ReturnCode> {
     let result = sqlx::query_as::<_, DetalleProyectos>(
-        "SELECT * FROM arqeth.sp_cpa_DetalleProyectosQry($1)"
+        "SELECT * FROM soltarc.sp_cpa_DetalleProyectosQry($1)"
     )
     .bind(id)
     .fetch_optional(pool)
@@ -118,7 +118,7 @@ pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<DetalleProyectos>
 // ─────────────────────────────────────────────
 pub async fn partidas_proyecto(pool: &PgPool, proyecto: i32) -> Result<Vec<DetalleProyectos>, ReturnCode> {
     let result = sqlx::query_as::<_, DetalleProyectos>(
-        "SELECT * FROM arqeth.sp_cpa_DetalleProyectosQryTareas($1)"
+        "SELECT * FROM soltarc.sp_cpa_DetalleProyectosQryTareas($1)"
     )
     .bind(proyecto)
     .fetch_all(pool)
@@ -136,7 +136,7 @@ pub async fn partidas_proyecto(pool: &PgPool, proyecto: i32) -> Result<Vec<Detal
 // ─────────────────────────────────────────────
 pub async fn carga_tareas(pool: &PgPool, proyecto: i32) -> Result<Vec<DetalleProyectos>, ReturnCode> {
     let result = sqlx::query_as::<_, DetalleProyectos>(
-        "SELECT * FROM arqeth.sp_cpa_DetalleProyectosQryPry($1)"
+        "SELECT * FROM soltarc.sp_cpa_DetalleProyectosQryPry($1)"
     )
     .bind(proyecto)
     .fetch_all(pool)
@@ -154,7 +154,7 @@ pub async fn carga_tareas(pool: &PgPool, proyecto: i32) -> Result<Vec<DetallePro
 // ─────────────────────────────────────────────
 pub async fn consulta_partidas_xref(pool: &PgPool, proyecto: i32) -> Result<Vec<DetalleProyectos>, ReturnCode> {
     let result = sqlx::query_as::<_, DetalleProyectos>(
-        "SELECT * FROM arqeth.sp_cpa_Proy_Partidas($1)"
+        "SELECT * FROM soltarc.sp_cpa_Proy_Partidas($1)"
     )
     .bind(proyecto)
     .fetch_all(pool)
@@ -172,7 +172,7 @@ pub async fn consulta_partidas_xref(pool: &PgPool, proyecto: i32) -> Result<Vec<
 // ─────────────────────────────────────────────
 pub async fn nodos_desc(pool: &PgPool, proyecto: i32, nodo_raiz: &str) -> Result<Vec<DetalleProyectos>, ReturnCode> {
     let result = sqlx::query_as::<_, DetalleProyectos>(
-        "SELECT * FROM arqeth.pdo_sp_PartidasFecDep_QRYUPDdes($1, $2)"
+        "SELECT * FROM soltarc.pdo_sp_PartidasFecDep_QRYUPDdes($1, $2)"
     )
     .bind(proyecto)
     .bind(nodo_raiz)
@@ -199,7 +199,7 @@ pub async fn actualiza_fechas(
     fecha_termino: Date,
 ) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.pdo_sp_PartidasFecDep_UPDdesFech($1, $2, $3, $4, $5, $6)"
+        "SELECT soltarc.pdo_sp_PartidasFecDep_UPDdesFech($1, $2, $3, $4, $5, $6)"
     )
     .bind(proyecto)
     .bind(nodo)
@@ -223,7 +223,7 @@ pub async fn actualiza_fechas(
 // ─────────────────────────────────────────────
 pub async fn copia_cont_partidas_qry(pool: &PgPool, pry_org: i32, pry_des: i32) -> Result<Vec<DetalleProyectos>, ReturnCode> {
     let result = sqlx::query_as::<_, DetalleProyectos>(
-        "SELECT * FROM arqeth.sp_cpa_DetProyCopyQry($1, $2)"
+        "SELECT * FROM soltarc.sp_cpa_DetProyCopyQry($1, $2)"
     )
     .bind(pry_org)
     .bind(pry_des)
@@ -243,7 +243,7 @@ pub async fn copia_cont_partidas_qry(pool: &PgPool, pry_org: i32, pry_des: i32) 
 // ─────────────────────────────────────────────
 pub async fn copia_contenido_partidas(pool: &PgPool, origen: i32, destino: i32) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_DetProyCopyUPD($1, $2)"
+        "SELECT soltarc.sp_cpa_DetProyCopyUPD($1, $2)"
     )
     .bind(origen)
     .bind(destino)
@@ -263,7 +263,7 @@ pub async fn copia_contenido_partidas(pool: &PgPool, origen: i32, destino: i32) 
 // ─────────────────────────────────────────────
 pub async fn adiciona_partidas_qry(pool: &PgPool, pry_org: i32, pry_des: i32) -> Result<Vec<DetalleProyectos>, ReturnCode> {
     let result = sqlx::query_as::<_, DetalleProyectos>(
-        "SELECT * FROM arqeth.sp_cpa_DetProyADDQry($1, $2)"
+        "SELECT * FROM soltarc.sp_cpa_DetProyADDQry($1, $2)"
     )
     .bind(pry_org)
     .bind(pry_des)
@@ -283,7 +283,7 @@ pub async fn adiciona_partidas_qry(pool: &PgPool, pry_org: i32, pry_des: i32) ->
 // ─────────────────────────────────────────────
 pub async fn adiciona_partidas_faltantes(pool: &PgPool, origen: i32, destino: i32) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_DetProyADDFaltantes($1, $2)"
+        "SELECT soltarc.sp_cpa_DetProyADDFaltantes($1, $2)"
     )
     .bind(origen)
     .bind(destino)
@@ -305,7 +305,7 @@ pub async fn adiciona_partidas_faltantes(pool: &PgPool, origen: i32, destino: i3
 // ─────────────────────────────────────────────
 pub async fn arbol(pool: &PgPool, proyecto: i32) -> Result<Vec<NodoArbol>, ReturnCode> {
     let result = sqlx::query_as::<_, NodoArbol>(
-        "SELECT t.*, NULL::TEXT AS ruta FROM arqeth.sp_cpa_detalleproy_arbol($1) t"
+        "SELECT t.*, NULL::TEXT AS ruta FROM soltarc.sp_cpa_detalleproy_arbol($1) t"
     )
     .bind(proyecto)
     .fetch_all(pool)
@@ -324,7 +324,7 @@ pub async fn arbol(pool: &PgPool, proyecto: i32) -> Result<Vec<NodoArbol>, Retur
 // ─────────────────────────────────────────────
 pub async fn buscar(pool: &PgPool, proyecto: i32, texto: &str) -> Result<Vec<NodoArbol>, ReturnCode> {
     let result = sqlx::query_as::<_, NodoArbol>(
-        "SELECT * FROM arqeth.sp_cpa_detalleproy_buscar($1, $2)"
+        "SELECT * FROM soltarc.sp_cpa_detalleproy_buscar($1, $2)"
     )
     .bind(proyecto)
     .bind(texto)

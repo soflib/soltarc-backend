@@ -24,7 +24,7 @@ use uuid::Uuid;
 // ─────────────────────────────────────────────
 pub async fn alta(pool: &PgPool, ppto: &Presupuesto, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_Presupuesto_Add($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"
+        "SELECT soltarc.ppto_sp_Presupuesto_Add($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"
     )
     .bind(&ppto.nombre)
     .bind(&ppto.descripcion)
@@ -53,7 +53,7 @@ pub async fn alta(pool: &PgPool, ppto: &Presupuesto, tenant_id: Uuid) -> ReturnC
 // ─────────────────────────────────────────────
 pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_Presupuesto_DEL($1, $2)"
+        "SELECT soltarc.ppto_sp_Presupuesto_DEL($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -72,7 +72,7 @@ pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
 // ─────────────────────────────────────────────
 pub async fn cambio(pool: &PgPool, ppto: &Presupuesto, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_Presupuesto_UPD($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)"
+        "SELECT soltarc.ppto_sp_Presupuesto_UPD($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)"
     )
     .bind(ppto.id.unwrap_or(0))  // id es Option<i32> — 0 nunca debería llegar aquí
     .bind(&ppto.nombre)
@@ -100,7 +100,7 @@ pub async fn cambio(pool: &PgPool, ppto: &Presupuesto, tenant_id: Uuid) -> Retur
 // ─────────────────────────────────────────────
 pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<Presupuesto>, ReturnCode> {
     let result = sqlx::query_as::<_, Presupuesto>(
-        "SELECT * FROM arqeth.ppto_sp_Presupuesto_QRY($1, $2)"
+        "SELECT * FROM soltarc.ppto_sp_Presupuesto_QRY($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -126,7 +126,7 @@ pub async fn carga_presupuestos(
     tenant_id: Uuid,
 ) -> Result<Vec<Presupuesto>, ReturnCode> {
     let result = sqlx::query_as::<_, Presupuesto>(
-        "SELECT * FROM arqeth.ppto_sp_Presupuesto_LSTACT($1, $2, $3, $4, $5)"
+        "SELECT * FROM soltarc.ppto_sp_Presupuesto_LSTACT($1, $2, $3, $4, $5)"
     )
     .bind(gpo_neg)
     .bind(gpo_user_id)
@@ -149,7 +149,7 @@ pub async fn carga_presupuestos(
 // ─────────────────────────────────────────────
 pub async fn lookup(pool: &PgPool, q: &str, cliente: Option<i32>, limit: i32, tenant_id: Uuid) -> Result<Vec<LookupItem>, ReturnCode> {
     let result = sqlx::query_as::<_, LookupItem>(
-        "SELECT id, etiqueta FROM arqeth.ppto_sp_presupuesto_lookup($1, $2, $3, $4)"
+        "SELECT id, etiqueta FROM soltarc.ppto_sp_presupuesto_lookup($1, $2, $3, $4)"
     )
     .bind(q)
     .bind(cliente)
@@ -174,17 +174,17 @@ pub async fn lookup_accesibles(
 ) -> Vec<LookupItem> {
     sqlx::query_as::<_, LookupItem>(
         r#"SELECT p.id, p.nombre AS etiqueta
-           FROM arqeth.ppto_presupuesto p
+           FROM soltarc.ppto_presupuesto p
            WHERE p.tenant_id = $1 AND p.activo = TRUE
              AND ( $4 = 1
                    OR p.cliente IN (
-                        SELECT DISTINCT pr.cliente FROM arqeth.cpa_proyectos pr
+                        SELECT DISTINCT pr.cliente FROM soltarc.cpa_proyectos pr
                         WHERE pr.tenant_id = $1 AND pr.activo = TRUE
                           AND ( ($4 = 2  AND $2 > 0 AND EXISTS (
-                                    SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                                    SELECT 1 FROM soltarc.cpa_proyecto_asignaciones a
                                     WHERE a.proyecto_id = pr.id AND a.gn_id = $2))
                                 OR ($4 >= 3 AND $3 > 0 AND EXISTS (
-                                    SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                                    SELECT 1 FROM soltarc.cpa_proyecto_asignaciones a
                                     WHERE a.proyecto_id = pr.id AND a.gn_usr_id = $3)) ) ) )
              AND ($5 = '' OR p.nombre ILIKE '%' || $5 || '%')
            ORDER BY p.nombre
@@ -200,17 +200,17 @@ pub async fn presupuesto_accesible(
 ) -> bool {
     sqlx::query_scalar::<_, bool>(
         r#"SELECT EXISTS(
-            SELECT 1 FROM arqeth.ppto_presupuesto p
+            SELECT 1 FROM soltarc.ppto_presupuesto p
             WHERE p.tenant_id = $1 AND p.id = $5
               AND ( $4 = 1
                     OR p.cliente IN (
-                         SELECT DISTINCT pr.cliente FROM arqeth.cpa_proyectos pr
+                         SELECT DISTINCT pr.cliente FROM soltarc.cpa_proyectos pr
                          WHERE pr.tenant_id = $1 AND pr.activo = TRUE
                            AND ( ($4 = 2  AND $2 > 0 AND EXISTS (
-                                     SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                                     SELECT 1 FROM soltarc.cpa_proyecto_asignaciones a
                                      WHERE a.proyecto_id = pr.id AND a.gn_id = $2))
                                  OR ($4 >= 3 AND $3 > 0 AND EXISTS (
-                                     SELECT 1 FROM arqeth.cpa_proyecto_asignaciones a
+                                     SELECT 1 FROM soltarc.cpa_proyecto_asignaciones a
                                      WHERE a.proyecto_id = pr.id AND a.gn_usr_id = $3)) ) ) ) )"#,
     )
     .bind(tenant_id).bind(grupo).bind(gn_usr_id).bind(nivel).bind(presupuesto)

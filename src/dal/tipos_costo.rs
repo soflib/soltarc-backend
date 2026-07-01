@@ -25,7 +25,7 @@ use uuid::Uuid;
 // ─────────────────────────────────────────────
 pub async fn alta(pool: &PgPool, tpo: &TiposCosto, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_TiposCosto_Add($1, $2, $3, $4, $5)"
+        "SELECT soltarc.ppto_sp_TiposCosto_Add($1, $2, $3, $4, $5)"
     )
     .bind(&tpo.nombre)
     .bind(&tpo.descripcion)
@@ -47,7 +47,7 @@ pub async fn alta(pool: &PgPool, tpo: &TiposCosto, tenant_id: Uuid) -> ReturnCod
 // ─────────────────────────────────────────────
 pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_TiposCosto_DEL($1, $2)"
+        "SELECT soltarc.ppto_sp_TiposCosto_DEL($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -67,7 +67,7 @@ pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
 // ─────────────────────────────────────────────
 pub async fn cambio(pool: &PgPool, tpo: &TiposCosto, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_TiposCosto_UPD($1, $2, $3, $4, $5, $6)"
+        "SELECT soltarc.ppto_sp_TiposCosto_UPD($1, $2, $3, $4, $5, $6)"
     )
     .bind(tpo.id.unwrap_or(0))  // id es Option<i32> — 0 nunca debería llegar aquí
     .bind(&tpo.nombre)
@@ -90,7 +90,7 @@ pub async fn cambio(pool: &PgPool, tpo: &TiposCosto, tenant_id: Uuid) -> ReturnC
 // ─────────────────────────────────────────────
 pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<TiposCosto>, ReturnCode> {
     let result = sqlx::query_as::<_, TiposCosto>(
-        "SELECT * FROM arqeth.ppto_sp_TiposCosto_QRY($1, $2)"
+        "SELECT * FROM soltarc.ppto_sp_TiposCosto_QRY($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -108,7 +108,7 @@ pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<
 // ─────────────────────────────────────────────
 pub async fn carga_tipos(pool: &PgPool, activos: bool, tenant_id: Uuid) -> Result<Vec<TiposCosto>, ReturnCode> {
     let result = sqlx::query_as::<_, TiposCosto>(
-        "SELECT * FROM arqeth.ppto_sp_TiposCosto_LSTACT($1, $2)"
+        "SELECT * FROM soltarc.ppto_sp_TiposCosto_LSTACT($1, $2)"
     )
     .bind(activos)
     .bind(tenant_id)

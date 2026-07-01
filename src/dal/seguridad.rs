@@ -43,7 +43,7 @@ pub async fn carga_variables(
 // ─────────────────────────────────────────────
 async fn consulta_grupo_neg(pool: &PgPool, seg: &mut Seguridad) -> Result<(), ReturnCode> {
     let result = sqlx::query_as::<_, GrupoRow>(
-        "SELECT nombre, descripcion, activo FROM arqeth.sp_GN_GruposQry($1)"
+        "SELECT nombre, descripcion, activo FROM soltarc.sp_GN_GruposQry($1)"
     )
     .bind(seg.gpo_id)
     .fetch_optional(pool)

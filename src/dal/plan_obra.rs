@@ -31,7 +31,7 @@ struct PlanStatusRow {
 // ─────────────────────────────────────────────
 pub async fn partida_upd_fecha(pool: &PgPool, pla: &PlanObra) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.pdo_sp_PartidasFecDep_UPD($1, $2, $3, $4, $5)"
+        "SELECT soltarc.pdo_sp_PartidasFecDep_UPD($1, $2, $3, $4, $5)"
     )
     .bind(pla.id)
     .bind(pla.fecha_ini)
@@ -53,7 +53,7 @@ pub async fn partida_upd_fecha(pool: &PgPool, pla: &PlanObra) -> ReturnCode {
 // ─────────────────────────────────────────────
 pub async fn partida_proyecto(pool: &PgPool, proyecto: i32) -> Result<Vec<PlanObra>, ReturnCode> {
     let result = sqlx::query_as::<_, PlanObra>(
-        "SELECT * FROM arqeth.pdo_sp_PartidasFecDep_QRY($1)"
+        "SELECT * FROM soltarc.pdo_sp_PartidasFecDep_QRY($1)"
     )
     .bind(proyecto)
     .fetch_all(pool)
@@ -71,7 +71,7 @@ pub async fn partida_proyecto(pool: &PgPool, proyecto: i32) -> Result<Vec<PlanOb
 // ─────────────────────────────────────────────
 pub async fn obtiene_avance(pool: &PgPool, proyecto: i32, nivel: i32) -> Result<Vec<PlanObra>, ReturnCode> {
     let result = sqlx::query_as::<_, PlanObra>(
-        "SELECT * FROM arqeth.sp_cpa_Proy_AvancePlan($1, $2)"
+        "SELECT * FROM soltarc.sp_cpa_Proy_AvancePlan($1, $2)"
     )
     .bind(proyecto)
     .bind(nivel)
@@ -94,7 +94,7 @@ pub async fn obtiene_avance(pool: &PgPool, proyecto: i32, nivel: i32) -> Result<
 // ─────────────────────────────────────────────
 pub async fn existe_plan(pool: &PgPool, proyecto: i32) -> Result<PlanStatus, ReturnCode> {
     let result = sqlx::query_as::<_, PlanStatusRow>(
-        "SELECT total_partidas, con_fecha FROM arqeth.pdo_sp_PartidasFecDep_QRYExist($1)"
+        "SELECT total_partidas, con_fecha FROM soltarc.pdo_sp_PartidasFecDep_QRYExist($1)"
     )
     .bind(proyecto)
     .fetch_optional(pool)
@@ -124,7 +124,7 @@ pub async fn crea_plan(
     estado: i32,
 ) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.pdo_sp_PartidasFecDep_ADDFyD($1, $2, $3, $4)"
+        "SELECT soltarc.pdo_sp_PartidasFecDep_ADDFyD($1, $2, $3, $4)"
     )
     .bind(proyecto)
     .bind(fecha_ini)
@@ -153,7 +153,7 @@ pub async fn descendientes_nodo(pool: &PgPool, proyecto: i32, nodo: &str) -> Res
     // p_proyecto acota a un solo proyecto (los nodos se repiten entre proyectos).
     let result = sqlx::query_as::<_, PlanObra>(
         "SELECT id, fecha_inicio AS fecha_ini, fecha_fin, estado, comentarios, fecha_termina, nodo, descripcion \
-         FROM arqeth.pdo_sp_PartidasFecDep_QRYUPDdes($1, $2)"
+         FROM soltarc.pdo_sp_PartidasFecDep_QRYUPDdes($1, $2)"
     )
     .bind(proyecto)
     .bind(nodo)

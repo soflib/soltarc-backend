@@ -65,7 +65,7 @@ use crate::api::handlers::sistema::logo as han_logo;
 
 #[derive(OpenApi)]
 #[openapi(
-    info(title = "Arqeth Services", version = "0.1.0"),
+    info(title = "SoltArc Services", version = "0.1.0"),
     paths(
         crate::api::handlers::health::health,
         // General Catalogs
@@ -380,6 +380,27 @@ use crate::api::handlers::sistema::logo as han_logo;
     )
 )]
 struct ApiDoc;
+
+/// HTML placeholder que se sirve en lugar del Swagger UI cuando ENV != "dev".
+/// Provisional — se reemplazará luego.
+const DOCS_DISABLED_HTML: &str = r#"<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SoltArc</title>
+</head>
+<body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#e2e8f0;">
+    <div style="text-align:center;">
+        <h1 style="margin:0 0 .5rem;font-size:1.5rem;">SoltArc</h1>
+        <p style="margin:0;color:#94a3b8;">La documentación de la API no está disponible en este entorno.</p>
+    </div>
+</body>
+</html>"#;
+
+async fn docs_disabled() -> axum::response::Html<&'static str> {
+    axum::response::Html(DOCS_DISABLED_HTML)
+}
 
 pub fn build_router(
     postgres: PgPool,
@@ -784,12 +805,23 @@ pub fn build_router(
         // outermost: validates token and populates AuthUser for all above
         .route_layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
-    base
+    let app = base
         .merge(han_auth_public)
-        .merge(protected)
-        .merge(
+        .merge(protected);
+
+    // Swagger UI solo en ENV=dev. En qa/prod (o sin ENV) se sirve un HTML
+    // placeholder en lugar del Swagger UI / spec.
+    let app = if std::env::var("ENV").unwrap_or_default().to_lowercase() == "dev" {
+        app.merge(
             SwaggerUi::new("/swagger-ui")
                 .url("/api-docs/openapi.json", ApiDoc::openapi()),
         )
-        .with_state(state)
+    } else {
+        app
+            .route("/swagger-ui", get(docs_disabled))
+            .route("/swagger-ui/", get(docs_disabled))
+            .route("/api-docs/openapi.json", get(docs_disabled))
+    };
+
+    app.with_state(state)
 }

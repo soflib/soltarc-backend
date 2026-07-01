@@ -30,7 +30,7 @@ struct FechasRow {
 // ─────────────────────────────────────────────
 pub async fn fechas(pool: &PgPool, proyecto: i32) -> Result<Fechas, ReturnCode> {
     let result = sqlx::query_as::<_, FechasRow>(
-        "SELECT fecha_ini, fecha_fin, num_semanas FROM arqeth.sp_cpa_PlanSemFechas($1)"
+        "SELECT fecha_ini, fecha_fin, num_semanas FROM soltarc.sp_cpa_PlanSemFechas($1)"
     )
     .bind(proyecto)
     .fetch_optional(pool)
@@ -62,7 +62,7 @@ pub async fn carga_partidas(
     nivel: i32,
 ) -> Result<Vec<PartidasSemanal>, ReturnCode> {
     let result = sqlx::query_as::<_, PartidasSemanal>(
-        "SELECT * FROM arqeth.sp_cpa_PlanSemPartidas($1, $2, $3)"
+        "SELECT * FROM soltarc.sp_cpa_PlanSemPartidas($1, $2, $3)"
     )
     .bind(proyecto)
     .bind(fecha_ini)

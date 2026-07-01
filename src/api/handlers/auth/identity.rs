@@ -242,7 +242,7 @@ pub async fn register(
 // ── Upgrade de plan ──────────────────────────────────────────────────────────
 // El admin del tenant ya pagó el upgrade en Stripe (vía payments_backend
 // /create/upgrade/intent, que SÍ acepta emails existentes); aquí solo
-// actualizamos el tope de proyectos en arqeth.cpa_tenant_limites.
+// actualizamos el tope de proyectos en soltarc.cpa_tenant_limites.
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpgradePlanInput {

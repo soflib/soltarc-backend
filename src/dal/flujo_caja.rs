@@ -20,7 +20,7 @@ pub async fn consulta_flujo(
     fecha_fin: Date,
 ) -> Result<Vec<FlujoCaja>, ReturnCode> {
     let result = sqlx::query_as::<_, FlujoCaja>(
-        "SELECT * FROM arqeth.sp_cpa_FlujoSaldos($1, $2, $3)"
+        "SELECT * FROM soltarc.sp_cpa_FlujoSaldos($1, $2, $3)"
     )
     .bind(fecha_saldo)
     .bind(fecha_ini)

@@ -23,7 +23,7 @@ use time::Date;
 // ─────────────────────────────────────────────
 pub async fn trx_financieras(pool: &PgPool, proyecto: i32) -> Result<Vec<TrxFinanciera>, ReturnCode> {
     let result = sqlx::query_as::<_, TrxFinanciera>(
-        "SELECT * FROM arqeth.sp_cpa_FinanzasProyQry($1)"
+        "SELECT * FROM soltarc.sp_cpa_FinanzasProyQry($1)"
     )
     .bind(proyecto)
     .fetch_all(pool)
@@ -49,7 +49,7 @@ pub async fn llena_det_proyectos(
     nivel: i32,        // default: 5
 ) -> Result<Vec<ResumenProyecto>, ReturnCode> {
     let result = sqlx::query_as::<_, ResumenProyecto>(
-        "SELECT * FROM arqeth.sp_cpa_FinanzasProySum($1, $2, $3, $4)"
+        "SELECT * FROM soltarc.sp_cpa_FinanzasProySum($1, $2, $3, $4)"
     )
     .bind(tenant_id)
     .bind(grupo)
@@ -71,7 +71,7 @@ pub async fn llena_det_proyectos(
 // ─────────────────────────────────────────────
 pub async fn distribuye_egreso(pool: &PgPool, egreso: i32, nodo: &str) -> ReturnCode {
     let result = sqlx::query_as::<_, ReturnCode>(
-        "SELECT codigo, mensaje, afectado FROM arqeth.pdo_sp_Finanzas_DistEgresoProp($1, $2)"
+        "SELECT codigo, mensaje, afectado FROM soltarc.pdo_sp_Finanzas_DistEgresoProp($1, $2)"
     )
     .bind(egreso)
     .bind(nodo)
@@ -96,7 +96,7 @@ pub async fn egresos_proveedor_proyecto(
     fecha_fin: Date,
 ) -> Result<Vec<EgresosProveedorProyecto>, ReturnCode> {
     let result = sqlx::query_as::<_, EgresosProveedorProyecto>(
-        "SELECT * FROM arqeth.sp_cpa_EgresosProveedorProyecto($1, $2, $3)"
+        "SELECT * FROM soltarc.sp_cpa_EgresosProveedorProyecto($1, $2, $3)"
     )
     .bind(tipo_rep)
     .bind(fecha_ini)
@@ -120,7 +120,7 @@ pub async fn ingresos_detalle(
     fecha_fin: Date,
 ) -> Result<Vec<IngresosDetalle>, ReturnCode> {
     let result = sqlx::query_as::<_, IngresosDetalle>(
-        "SELECT * FROM arqeth.sp_cpa_IngresosQryGeneral($1, $2)"
+        "SELECT * FROM soltarc.sp_cpa_IngresosQryGeneral($1, $2)"
     )
     .bind(fecha_ini)
     .bind(fecha_fin)

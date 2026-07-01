@@ -22,7 +22,7 @@ use sqlx::PgPool;
 // ─────────────────────────────────────────────
 pub async fn alta(pool: &PgPool, xref: &XrefDetalleProyFinan) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_xpfDetProyFinAdd($1, $2, $3, $4, $5, $6)"
+        "SELECT soltarc.sp_cpa_xpfDetProyFinAdd($1, $2, $3, $4, $5, $6)"
     )
     .bind(xref.partida)
     .bind(xref.tipo)
@@ -46,7 +46,7 @@ pub async fn alta(pool: &PgPool, xref: &XrefDetalleProyFinan) -> ReturnCode {
 // ─────────────────────────────────────────────
 pub async fn baja(pool: &PgPool, x_ref: i32) -> ReturnCode {
     let result = sqlx::query_as::<_, ReturnCode>(
-        "SELECT codigo, mensaje, afectado FROM arqeth.sp_cpa_xpfDetProyFinDel($1)"
+        "SELECT codigo, mensaje, afectado FROM soltarc.sp_cpa_xpfDetProyFinDel($1)"
     )
     .bind(x_ref)
     .fetch_optional(pool)
@@ -64,7 +64,7 @@ pub async fn baja(pool: &PgPool, x_ref: i32) -> ReturnCode {
 // ─────────────────────────────────────────────
 pub async fn cambio(pool: &PgPool, xref: &XrefDetalleProyFinan) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.sp_cpa_xpfDetProyFinUpd($1, $2, $3, $4, $5, $6, $7)"
+        "SELECT soltarc.sp_cpa_xpfDetProyFinUpd($1, $2, $3, $4, $5, $6, $7)"
     )
     .bind(xref.id)
     .bind(xref.partida)
@@ -88,7 +88,7 @@ pub async fn cambio(pool: &PgPool, xref: &XrefDetalleProyFinan) -> ReturnCode {
 // ─────────────────────────────────────────────
 pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<XrefDetalleProyFinan>, ReturnCode> {
     let result = sqlx::query_as::<_, XrefDetalleProyFinan>(
-        "SELECT * FROM arqeth.sp_cpa_xpfDetProyFinQry($1)"
+        "SELECT * FROM soltarc.sp_cpa_xpfDetProyFinQry($1)"
     )
     .bind(id)
     .fetch_optional(pool)
@@ -105,7 +105,7 @@ pub async fn consulta(pool: &PgPool, id: i32) -> Result<Option<XrefDetalleProyFi
 // ─────────────────────────────────────────────
 pub async fn egresos_a_partidas(pool: &PgPool, partida: i32) -> Result<Vec<XrefDetalleProyFinan>, ReturnCode> {
     let result = sqlx::query_as::<_, XrefDetalleProyFinan>(
-        "SELECT * FROM arqeth.sp_cpa_Proy_Partidas_Egresos($1)"
+        "SELECT * FROM soltarc.sp_cpa_Proy_Partidas_Egresos($1)"
     )
     .bind(partida)
     .fetch_all(pool)
@@ -125,7 +125,7 @@ pub async fn egresos_a_partidas(pool: &PgPool, partida: i32) -> Result<Vec<XrefD
 // ─────────────────────────────────────────────
 pub async fn saldo(pool: &PgPool, transaccion: i32) -> Result<XrefSaldo, ReturnCode> {
     let result = sqlx::query_as::<_, XrefSaldo>(
-        "SELECT * FROM arqeth.sp_cpa_xref_saldo($1)"
+        "SELECT * FROM soltarc.sp_cpa_xref_saldo($1)"
     )
     .bind(transaccion)
     .fetch_optional(pool)
@@ -144,7 +144,7 @@ pub async fn saldo(pool: &PgPool, transaccion: i32) -> Result<XrefSaldo, ReturnC
 // ─────────────────────────────────────────────
 pub async fn egresos_no_asignados(pool: &PgPool, proyecto: i32) -> Result<Vec<XrefDetalleProyFinan>, ReturnCode> {
     let result = sqlx::query_as::<_, XrefDetalleProyFinan>(
-        "SELECT * FROM arqeth.sp_cpa_EgresosNoAplicados($1)"
+        "SELECT * FROM soltarc.sp_cpa_EgresosNoAplicados($1)"
     )
     .bind(proyecto)
     .fetch_all(pool)

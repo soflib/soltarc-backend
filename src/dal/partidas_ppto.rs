@@ -24,7 +24,7 @@ use sqlx::PgPool;
 // ─────────────────────────────────────────────
 pub async fn alta(pool: &PgPool, par: &PartidasPpto) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_PartidasPPTO_Add($1,$2,$3,$4,$5,$6,$7)"
+        "SELECT soltarc.ppto_sp_PartidasPPTO_Add($1,$2,$3,$4,$5,$6,$7)"
     )
     .bind(par.presupuesto)
     .bind(&par.nodo)
@@ -49,7 +49,7 @@ pub async fn alta(pool: &PgPool, par: &PartidasPpto) -> ReturnCode {
 // ─────────────────────────────────────────────
 pub async fn borra(pool: &PgPool, id: i32, nodo: &str) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_PartidasPPTO_DEL($1, $2)"
+        "SELECT soltarc.ppto_sp_PartidasPPTO_DEL($1, $2)"
     )
     .bind(id)
     .bind(nodo)
@@ -69,7 +69,7 @@ pub async fn borra(pool: &PgPool, id: i32, nodo: &str) -> ReturnCode {
 // ─────────────────────────────────────────────
 pub async fn cambio(pool: &PgPool, par: &PartidasPpto) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_PartidasPPTO_UPD($1,$2,$3,$4,$5,$6)"
+        "SELECT soltarc.ppto_sp_PartidasPPTO_UPD($1,$2,$3,$4,$5,$6)"
     )
     .bind(par.id.unwrap_or(0))  // id es Option<i32> — 0 nunca debería llegar aquí
     .bind(&par.concepto)
@@ -92,7 +92,7 @@ pub async fn cambio(pool: &PgPool, par: &PartidasPpto) -> ReturnCode {
 // ─────────────────────────────────────────────
 pub async fn carga_partidas(pool: &PgPool, presupuesto: i32) -> Result<Vec<PartidasPpto>, ReturnCode> {
     let result = sqlx::query_as::<_, PartidasPpto>(
-        "SELECT * FROM arqeth.ppto_sp_PartidasPPTO_LSTPPTO($1)"
+        "SELECT * FROM soltarc.ppto_sp_PartidasPPTO_LSTPPTO($1)"
     )
     .bind(presupuesto)
     .fetch_all(pool)
@@ -111,7 +111,7 @@ pub async fn carga_partidas(pool: &PgPool, presupuesto: i32) -> Result<Vec<Parti
 // ─────────────────────────────────────────────
 pub async fn partidas_actualiza_nodo(pool: &PgPool, id: i32, ppto: i32, nuevo_nodo: &str) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_PartidasNODOS_UPD($1, $2, $3)"
+        "SELECT soltarc.ppto_sp_PartidasNODOS_UPD($1, $2, $3)"
     )
     .bind(id)
     .bind(ppto)
@@ -140,7 +140,7 @@ pub async fn nuevo_nodo_adiciona(
     nivel: i32,
 ) -> Result<String, ReturnCode> {
     let result = sqlx::query_scalar::<_, Option<String>>(
-        "SELECT arqeth.ppto_sp_PartidasPPTO_SigNod($1, $2, $3)"
+        "SELECT soltarc.ppto_sp_PartidasPPTO_SigNod($1, $2, $3)"
     )
     .bind(ppto)
     .bind(nodo)
@@ -184,7 +184,7 @@ pub async fn nuevo_nodo_adiciona(
 // ─────────────────────────────────────────────
 pub async fn carga_2_nivel(pool: &PgPool, nodo: i32, ppto: i32) -> Result<Vec<PartidasPpto>, ReturnCode> {
     let result = sqlx::query_as::<_, PartidasPpto>(
-        "SELECT * FROM arqeth.ppto_sp_PartidasPPTO_QRY2LVL($1, $2)"
+        "SELECT * FROM soltarc.ppto_sp_PartidasPPTO_QRY2LVL($1, $2)"
     )
     .bind(nodo)
     .bind(ppto)
@@ -206,7 +206,7 @@ pub async fn carga_2_nivel(pool: &PgPool, nodo: i32, ppto: i32) -> Result<Vec<Pa
 // ─────────────────────────────────────────────
 pub async fn buscar(pool: &PgPool, presupuesto: i32, texto: &str) -> Result<Vec<PartidaBuscada>, ReturnCode> {
     let result = sqlx::query_as::<_, PartidaBuscada>(
-        "SELECT * FROM arqeth.sp_cpa_partidasppto_buscar($1, $2)"
+        "SELECT * FROM soltarc.sp_cpa_partidasppto_buscar($1, $2)"
     )
     .bind(presupuesto)
     .bind(texto)

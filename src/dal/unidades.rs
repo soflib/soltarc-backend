@@ -26,7 +26,7 @@ use uuid::Uuid;
 // ─────────────────────────────────────────────
 pub async fn alta(pool: &PgPool, uni: &Unidades, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_Unidades_Add($1, $2, $3, $4, $5)"
+        "SELECT soltarc.ppto_sp_Unidades_Add($1, $2, $3, $4, $5)"
     )
     .bind(uni.tipo)
     .bind(&uni.descripcion)
@@ -48,7 +48,7 @@ pub async fn alta(pool: &PgPool, uni: &Unidades, tenant_id: Uuid) -> ReturnCode 
 // ─────────────────────────────────────────────
 pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_Unidades_DEL($1, $2)"
+        "SELECT soltarc.ppto_sp_Unidades_DEL($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -67,7 +67,7 @@ pub async fn baja(pool: &PgPool, id: i32, tenant_id: Uuid) -> ReturnCode {
 // ─────────────────────────────────────────────
 pub async fn cambio(pool: &PgPool, uni: &Unidades, tenant_id: Uuid) -> ReturnCode {
     let result = sqlx::query_scalar::<_, i32>(
-        "SELECT arqeth.ppto_sp_Unidades_UPD($1, $2, $3, $4, $5, $6)"
+        "SELECT soltarc.ppto_sp_Unidades_UPD($1, $2, $3, $4, $5, $6)"
     )
     .bind(uni.id.unwrap_or(0))  // id es Option<i32> — 0 nunca debería llegar aquí
     .bind(uni.tipo)
@@ -90,7 +90,7 @@ pub async fn cambio(pool: &PgPool, uni: &Unidades, tenant_id: Uuid) -> ReturnCod
 // ─────────────────────────────────────────────
 pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<Unidades>, ReturnCode> {
     let result = sqlx::query_as::<_, Unidades>(
-        "SELECT * FROM arqeth.ppto_sp_Unidades_QRY($1, $2)"
+        "SELECT * FROM soltarc.ppto_sp_Unidades_QRY($1, $2)"
     )
     .bind(id)
     .bind(tenant_id)
@@ -111,7 +111,7 @@ pub async fn consulta(pool: &PgPool, id: i32, tenant_id: Uuid) -> Result<Option<
 // ─────────────────────────────────────────────
 pub async fn obtiene_unidades(pool: &PgPool, tenant_id: Uuid) -> Result<Vec<Unidades>, ReturnCode> {
     let result = sqlx::query_as::<_, Unidades>(
-        "SELECT * FROM arqeth.ppto_sp_Unidades_LSTACT($1)"
+        "SELECT * FROM soltarc.ppto_sp_Unidades_LSTACT($1)"
     )
     .bind(tenant_id)
     .fetch_all(pool)
